@@ -1,6 +1,9 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+// Re-export authentication types
+pub use crate::auth::{LoginCredentials, PinData, RegisterLoginResult, AuthManager};
+
 /// Main configuration for the GDK session, mirroring GA_init's JSON config.
 #[derive(Serialize, Deserialize, Debug, Clone, Default)]
 pub struct GdkConfig {

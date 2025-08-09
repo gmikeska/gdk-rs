@@ -1,0 +1,336 @@
+//! Tests for comprehensive address management functionality
+
+#[cfg(test)]
+mod tests {
+    use crate::wallet_simple::{Wallet, SubaccountType, AddressInfo};
+    use crate::primitives::address::Network;
+
+    #[test]
+    fn test_receive_address_generation() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        let subaccount_id = wallet.create_subaccount("Test Account".to_string(), SubaccountType::Legacy).unwrap();
+        
+        // Generate first receiving address
+        let address1 = wallet.get_receive_address(subaccount_id).unwrap();
+        assert!(!address1.is_empty());
+        
+        // Generate second receiving address - should be different
+        let address2 = wallet.get_receive_address(subaccount_id).unwrap();
+        assert!(!address2.is_empty());
+        assert_ne!(address1, address2);
+        
+        // Verify subaccount index was incremented
+        let subaccount = wallet.get_subaccount(subaccount_id).unwrap();
+        assert_eq!(subaccount.next_receive_index, 2);
+        assert_eq!(subaccount.next_change_index, 0); // Should remain unchanged
+    }
+
+    #[test]
+    fn test_change_address_generation() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        let subaccount_id = wallet.create_subaccount("Test Account".to_string(), SubaccountType::NativeSegwit).unwrap();
+        
+        // Generate first change address
+        let address1 = wallet.get_change_address(subaccount_id).unwrap();
+        assert!(!address1.is_empty());
+        assert!(address1.starts_with("tb1")); // Testnet native segwit
+        
+        // Generate second change address - should be different
+        let address2 = wallet.get_change_address(subaccount_id).unwrap();
+        assert!(!address2.is_empty());
+        assert_ne!(address1, address2);
+        
+        // Verify subaccount index was incremented
+        let subaccount = wallet.get_subaccount(subaccount_id).unwrap();
+        assert_eq!(subaccount.next_change_index, 2);
+        assert_eq!(subaccount.next_receive_index, 0); // Should remain unchanged
+    }
+
+    #[test]
+    fn test_previous_addresses_retrieval() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        let subaccount_id = wallet.create_subaccount("Test Account".to_string(), SubaccountType::Legacy).unwrap();
+        
+        // Initially should have no addresses
+        let addresses = wallet.get_previous_addresses(subaccount_id).unwrap();
+        assert_eq!(addresses.len(), 0);
+        
+        // Generate some addresses
+        let _addr1 = wallet.get_receive_address(subaccount_id).unwrap();
+        let _addr2 = wallet.get_receive_address(subaccount_id).unwrap();
+        let _change1 = wallet.get_change_address(subaccount_id).unwrap();
+        
+        // Should now have 3 addresses
+        let addresses = wallet.get_previous_addresses(subaccount_id).unwrap();
+        assert_eq!(addresses.len(), 3);
+        
+        // Check address properties
+        let receive_addresses: Vec<_> = addresses.iter().filter(|a| !a.is_change).collect();
+        let change_addresses: Vec<_> = addresses.iter().filter(|a| a.is_change).collect();
+        
+        assert_eq!(receive_addresses.len(), 2);
+        assert_eq!(change_addresses.len(), 1);
+        
+        // Verify address indices
+        assert_eq!(receive_addresses[0].address_index, 0);
+        assert_eq!(receive_addresses[1].address_index, 1);
+        assert_eq!(change_addresses[0].address_index, 0);
+        
+        // Verify derivation paths
+        assert!(receive_addresses[0].derivation_path.contains("/0/0"));
+        assert!(receive_addresses[1].derivation_path.contains("/0/1"));
+        assert!(change_addresses[0].derivation_path.contains("/1/0"));
+    }
+
+    #[test]
+    fn test_address_types_by_subaccount_type() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        // Test Legacy addresses (P2PKH)
+        let legacy_id = wallet.create_subaccount("Legacy".to_string(), SubaccountType::Legacy).unwrap();
+        let legacy_addr = wallet.get_receive_address(legacy_id).unwrap();
+        assert!(legacy_addr.starts_with("m") || legacy_addr.starts_with("n")); // Testnet P2PKH
+        
+        // Test Native SegWit addresses (P2WPKH)
+        let segwit_id = wallet.create_subaccount("SegWit".to_string(), SubaccountType::NativeSegwit).unwrap();
+        let segwit_addr = wallet.get_receive_address(segwit_id).unwrap();
+        assert!(segwit_addr.starts_with("tb1")); // Testnet native segwit
+        
+        // Test Wrapped SegWit addresses (P2SH-P2WPKH)
+        let wrapped_id = wallet.create_subaccount("Wrapped".to_string(), SubaccountType::SegwitWrapped).unwrap();
+        let wrapped_addr = wallet.get_receive_address(wrapped_id).unwrap();
+        assert!(wrapped_addr.starts_with("2")); // Testnet P2SH
+    }
+
+    #[test]
+    fn test_address_validation() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        // Test valid testnet addresses
+        assert!(wallet.validate_address("tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx").unwrap()); // Valid testnet bech32
+        assert!(wallet.validate_address("2MzQwSSnBHWHqSAqtTVQ6v47XtaisrJa1Vc").unwrap()); // Valid testnet P2SH
+        assert!(wallet.validate_address("mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn").unwrap()); // Valid testnet P2PKH
+        
+        // Test invalid addresses
+        assert!(wallet.validate_address("invalid_address").is_err());
+        assert!(wallet.validate_address("").is_err());
+        
+        // Test mainnet addresses (should be valid format but wrong network)
+        let mainnet_result = wallet.validate_address("1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2");
+        assert!(mainnet_result.is_ok());
+        assert!(!mainnet_result.unwrap()); // Should return false for wrong network
+    }
+
+    #[test]
+    fn test_address_compatibility() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        // Create a subaccount to establish network
+        let _subaccount_id = wallet.create_subaccount("Test".to_string(), SubaccountType::Legacy).unwrap();
+        
+        // Test compatible testnet addresses
+        assert!(wallet.is_address_compatible("tb1qw508d6qejxtdg4y5r3zarvary0c5xw7kxpjzsx"));
+        assert!(wallet.is_address_compatible("2MzQwSSnBHWHqSAqtTVQ6v47XtaisrJa1Vc"));
+        assert!(wallet.is_address_compatible("mipcBbFg9gMiCh81Kj8tqqdgoZub1ZJRfn"));
+        
+        // Test incompatible mainnet addresses
+        assert!(!wallet.is_address_compatible("1BvBMSEYstWetqTFn5Au4m4GFg7xJaNVN2"));
+        assert!(!wallet.is_address_compatible("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4"));
+        
+        // Test invalid addresses
+        assert!(!wallet.is_address_compatible("invalid_address"));
+        assert!(!wallet.is_address_compatible(""));
+    }
+
+    #[test]
+    fn test_ensure_addresses() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        let subaccount_id = wallet.create_subaccount("Test Account".to_string(), SubaccountType::Legacy).unwrap();
+        
+        // Initially, subaccount should have indices at 0
+        let subaccount = wallet.get_subaccount(subaccount_id).unwrap();
+        assert_eq!(subaccount.next_receive_index, 0);
+        assert_eq!(subaccount.next_change_index, 0);
+        assert_eq!(subaccount.gap_limit, 20);
+        
+        // Ensure addresses up to gap limit
+        let new_addresses = wallet.ensure_addresses(subaccount_id).unwrap();
+        assert_eq!(new_addresses.len(), 40); // 20 receive + 20 change
+        
+        // Verify indices were updated
+        let subaccount = wallet.get_subaccount(subaccount_id).unwrap();
+        assert_eq!(subaccount.next_receive_index, 20);
+        assert_eq!(subaccount.next_change_index, 20);
+        
+        // Calling ensure_addresses again should return empty (already at gap limit)
+        let new_addresses = wallet.ensure_addresses(subaccount_id).unwrap();
+        assert_eq!(new_addresses.len(), 0);
+    }
+
+    #[test]
+    fn test_gap_limit_management() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        let subaccount_id = wallet.create_subaccount("Test Account".to_string(), SubaccountType::Legacy).unwrap();
+        
+        // Set custom gap limit
+        wallet.set_gap_limit(subaccount_id, 5).unwrap();
+        
+        let subaccount = wallet.get_subaccount(subaccount_id).unwrap();
+        assert_eq!(subaccount.gap_limit, 5);
+        
+        // Ensure addresses with new gap limit
+        let new_addresses = wallet.ensure_addresses(subaccount_id).unwrap();
+        assert_eq!(new_addresses.len(), 10); // 5 receive + 5 change
+        
+        // Test setting gap limit for non-existent subaccount
+        let result = wallet.set_gap_limit(999, 10);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_needs_more_addresses() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        let subaccount_id = wallet.create_subaccount("Test Account".to_string(), SubaccountType::Legacy).unwrap();
+        
+        // Set small gap limit for testing
+        wallet.set_gap_limit(subaccount_id, 3).unwrap();
+        wallet.ensure_addresses(subaccount_id).unwrap();
+        
+        // Create mock used addresses
+        let used_addresses = vec![
+            AddressInfo {
+                address: "test1".to_string(),
+                derivation_path: "m/44'/1'/0'/0/0".to_string(),
+                used: true,
+                tx_count: 1,
+                balance: 1000,
+                address_index: 0,
+                is_change: false,
+            },
+            AddressInfo {
+                address: "test2".to_string(),
+                derivation_path: "m/44'/1'/0'/0/1".to_string(),
+                used: true,
+                tx_count: 2,
+                balance: 2000,
+                address_index: 1,
+                is_change: false,
+            },
+        ];
+        
+        // With 2 used addresses and gap limit 3, we should need more addresses
+        let needs_more = wallet.needs_more_addresses(subaccount_id, &used_addresses).unwrap();
+        assert!(needs_more);
+        
+        // Test with no used addresses - should not need more (gap is full)
+        let needs_more = wallet.needs_more_addresses(subaccount_id, &[]).unwrap();
+        assert!(!needs_more);
+        
+        // Test with non-existent subaccount
+        let result = wallet.needs_more_addresses(999, &used_addresses);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_address_at_specific_path() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        let subaccount_id = wallet.create_subaccount("Test Account".to_string(), SubaccountType::Legacy).unwrap();
+        
+        // Get address at specific path
+        let address_0_0 = wallet.get_address_at_path(subaccount_id, false, 0).unwrap();
+        let address_0_1 = wallet.get_address_at_path(subaccount_id, false, 1).unwrap();
+        let address_1_0 = wallet.get_address_at_path(subaccount_id, true, 0).unwrap();
+        
+        // Addresses should be different
+        assert_ne!(address_0_0, address_0_1);
+        assert_ne!(address_0_0, address_1_0);
+        assert_ne!(address_0_1, address_1_0);
+        
+        // Getting the same path should return the same address
+        let address_0_0_again = wallet.get_address_at_path(subaccount_id, false, 0).unwrap();
+        assert_eq!(address_0_0, address_0_0_again);
+        
+        // Test with non-existent subaccount
+        let result = wallet.get_address_at_path(999, false, 0);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_address_usage_update() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        let subaccount_id = wallet.create_subaccount("Test Account".to_string(), SubaccountType::Legacy).unwrap();
+        let address = wallet.get_receive_address(subaccount_id).unwrap();
+        
+        // Update address usage
+        let result = wallet.update_address_usage(subaccount_id, &address, true, 5, 100000);
+        assert!(result.is_ok());
+        
+        // Test with non-existent subaccount
+        let result = wallet.update_address_usage(999, &address, true, 5, 100000);
+        assert!(result.is_err());
+    }
+
+    #[test]
+    fn test_mainnet_address_generation() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet = Wallet::from_mnemonic(mnemonic, Network::Mainnet).unwrap();
+        
+        // Test Legacy addresses (P2PKH)
+        let legacy_id = wallet.create_subaccount("Legacy".to_string(), SubaccountType::Legacy).unwrap();
+        let legacy_addr = wallet.get_receive_address(legacy_id).unwrap();
+        assert!(legacy_addr.starts_with("1")); // Mainnet P2PKH
+        
+        // Test Native SegWit addresses (P2WPKH)
+        let segwit_id = wallet.create_subaccount("SegWit".to_string(), SubaccountType::NativeSegwit).unwrap();
+        let segwit_addr = wallet.get_receive_address(segwit_id).unwrap();
+        assert!(segwit_addr.starts_with("bc1")); // Mainnet native segwit
+        
+        // Test Wrapped SegWit addresses (P2SH-P2WPKH)
+        let wrapped_id = wallet.create_subaccount("Wrapped".to_string(), SubaccountType::SegwitWrapped).unwrap();
+        let wrapped_addr = wallet.get_receive_address(wrapped_id).unwrap();
+        assert!(wrapped_addr.starts_with("3")); // Mainnet P2SH
+    }
+
+    #[test]
+    fn test_address_derivation_consistency() {
+        let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let wallet1 = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        let wallet2 = Wallet::from_mnemonic(mnemonic, Network::Testnet).unwrap();
+        
+        // Create same subaccount type in both wallets
+        let id1 = wallet1.create_subaccount("Test".to_string(), SubaccountType::Legacy).unwrap();
+        let id2 = wallet2.create_subaccount("Test".to_string(), SubaccountType::Legacy).unwrap();
+        
+        // Same derivation path should produce same address
+        let addr1 = wallet1.get_address_at_path(id1, false, 0).unwrap();
+        let addr2 = wallet2.get_address_at_path(id2, false, 0).unwrap();
+        assert_eq!(addr1, addr2);
+        
+        // Different indices should produce different addresses
+        let addr1_1 = wallet1.get_address_at_path(id1, false, 1).unwrap();
+        assert_ne!(addr1, addr1_1);
+        
+        // Change vs receive should produce different addresses
+        let change_addr1 = wallet1.get_address_at_path(id1, true, 0).unwrap();
+        assert_ne!(addr1, change_addr1);
+    }
+}

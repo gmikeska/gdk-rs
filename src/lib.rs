@@ -13,12 +13,16 @@ pub mod primitives;
 pub mod session;
 pub mod auth;
 pub mod wallet;
+// pub mod wallet_simple; // Not implemented yet
 pub mod bip39;
 pub mod api;
 pub mod assets;
 pub mod hw;
 pub mod utils;
 pub mod protocol;
+pub mod notifications;
+pub mod transaction_builder;
+pub mod transaction_signer;
 
 pub use error::GdkError;
 pub use session::Session;

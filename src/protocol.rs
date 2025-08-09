@@ -143,6 +143,41 @@ pub struct CreateTransactionParams {
 pub struct BlockNotification {
     pub block_hash: String,
     pub block_height: u32,
+    pub timestamp: Option<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct NetworkStatusNotification {
+    pub connected: bool,
+    pub login_required: bool,
+    pub elapsed: u64,
+    pub limit: bool,
+    pub blocks: u32,
+    pub verified: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct TwoFactorNotification {
+    pub method: String,
+    pub action: String,
+    pub device: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct FeeEstimateNotification {
+    pub fees: Vec<u64>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct SettingsNotification {
+    pub event: String,
+    pub settings: serde_json::Value,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct AssetsNotification {
+    pub assets_updated: bool,
+    pub icons_updated: bool,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -151,5 +186,64 @@ pub struct BlockNotification {
 pub enum Notification {
     Block(BlockNotification),
     Transaction(TransactionListItem),
-    // Other notification types will be added here
+    Network(NetworkStatusNotification),
+    TwoFactor(TwoFactorNotification),
+    FeeEstimate(FeeEstimateNotification),
+    Settings(SettingsNotification),
+    Assets(AssetsNotification),
+}
+
+/// Notification filter for subscription management
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct NotificationFilter {
+    pub block_notifications: bool,
+    pub transaction_notifications: bool,
+    pub network_notifications: bool,
+    pub two_factor_notifications: bool,
+    pub fee_estimate_notifications: bool,
+    pub settings_notifications: bool,
+    pub assets_notifications: bool,
+    pub subaccount_filter: Option<Vec<u32>>, // Filter by specific subaccounts
+}
+
+impl Default for NotificationFilter {
+    fn default() -> Self {
+        Self {
+            block_notifications: true,
+            transaction_notifications: true,
+            network_notifications: true,
+            two_factor_notifications: true,
+            fee_estimate_notifications: true,
+            settings_notifications: true,
+            assets_notifications: true,
+            subaccount_filter: None,
+        }
+    }
+}
+
+impl NotificationFilter {
+    pub fn should_include(&self, notification: &Notification) -> bool {
+        match notification {
+            Notification::Block(_) => self.block_notifications,
+            Notification::Transaction(tx) => {
+                if !self.transaction_notifications {
+                    return false;
+                }
+                // Check subaccount filter
+                if let Some(ref filter_subaccounts) = self.subaccount_filter {
+                    // Check if any of the transaction's inputs or outputs match the filter
+                    let has_matching_subaccount = tx.inputs.iter().any(|input| filter_subaccounts.contains(&input.subaccount))
+                        || tx.outputs.iter().any(|output| filter_subaccounts.contains(&output.subaccount));
+                    has_matching_subaccount
+                } else {
+                    true
+                }
+            }
+            Notification::Network(_) => self.network_notifications,
+            Notification::TwoFactor(_) => self.two_factor_notifications,
+            Notification::FeeEstimate(_) => self.fee_estimate_notifications,
+            Notification::Settings(_) => self.settings_notifications,
+            Notification::Assets(_) => self.assets_notifications,
+        }
+    }
 }

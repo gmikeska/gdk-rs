@@ -1,25 +1,35 @@
-//! Bitcoin transaction data structures.
+//! Bitcoin transaction data structures with SegWit support.
 
-use super::encode::{Encodable, write_varint};
-use crate::Result;
+use super::encode::{Encodable, Decodable, write_varint, read_varint};
+use super::hash::{sha256d, Hash256};
+use super::script::Script;
+use crate::{Result, GdkError};
 use serde::{Deserialize, Serialize};
-use std::io::Write;
+use std::io::{Read, Write};
 
-#[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
-pub struct Script(pub Vec<u8>);
 
-impl Encodable for Script {
-    fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize> {
-        let mut written = write_varint(writer, self.0.len() as u64)?;
-        written += writer.write(&self.0)?;
-        Ok(written)
-    }
-}
 
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct OutPoint {
     pub txid: [u8; 32],
     pub vout: u32,
+}
+
+impl OutPoint {
+    pub fn new(txid: [u8; 32], vout: u32) -> Self {
+        OutPoint { txid, vout }
+    }
+    
+    pub fn null() -> Self {
+        OutPoint {
+            txid: [0; 32],
+            vout: 0xffffffff,
+        }
+    }
+    
+    pub fn is_null(&self) -> bool {
+        self.txid == [0; 32] && self.vout == 0xffffffff
+    }
 }
 
 impl Encodable for OutPoint {
@@ -30,11 +40,35 @@ impl Encodable for OutPoint {
     }
 }
 
+impl Decodable for OutPoint {
+    fn consensus_decode<R: Read>(reader: &mut R) -> Result<Self> {
+        let txid = <[u8; 32]>::consensus_decode(reader)?;
+        let vout = u32::consensus_decode(reader)?;
+        Ok(OutPoint { txid, vout })
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct TxIn {
     pub previous_output: OutPoint,
     pub script_sig: Script,
     pub sequence: u32,
+    pub witness: Vec<Vec<u8>>,
+}
+
+impl TxIn {
+    pub fn new(previous_output: OutPoint, script_sig: Script, sequence: u32) -> Self {
+        TxIn {
+            previous_output,
+            script_sig,
+            sequence,
+            witness: Vec::new(),
+        }
+    }
+    
+    pub fn has_witness(&self) -> bool {
+        !self.witness.is_empty()
+    }
 }
 
 impl Encodable for TxIn {
@@ -46,10 +80,30 @@ impl Encodable for TxIn {
     }
 }
 
+impl Decodable for TxIn {
+    fn consensus_decode<R: Read>(reader: &mut R) -> Result<Self> {
+        let previous_output = OutPoint::consensus_decode(reader)?;
+        let script_sig = Script::consensus_decode(reader)?;
+        let sequence = u32::consensus_decode(reader)?;
+        Ok(TxIn {
+            previous_output,
+            script_sig,
+            sequence,
+            witness: Vec::new(), // Witness data is decoded separately
+        })
+    }
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, PartialEq, Eq)]
 pub struct TxOut {
     pub value: u64,
     pub script_pubkey: Script,
+}
+
+impl TxOut {
+    pub fn new(value: u64, script_pubkey: Script) -> Self {
+        TxOut { value, script_pubkey }
+    }
 }
 
 impl Encodable for TxOut {
@@ -57,6 +111,14 @@ impl Encodable for TxOut {
         let mut written = self.value.consensus_encode(writer)?;
         written += self.script_pubkey.consensus_encode(writer)?;
         Ok(written)
+    }
+}
+
+impl Decodable for TxOut {
+    fn consensus_decode<R: Read>(reader: &mut R) -> Result<Self> {
+        let value = u64::consensus_decode(reader)?;
+        let script_pubkey = Script::consensus_decode(reader)?;
+        Ok(TxOut { value, script_pubkey })
     }
 }
 
@@ -68,44 +130,365 @@ pub struct Transaction {
     pub output: Vec<TxOut>,
 }
 
+impl Transaction {
+    pub fn new() -> Self {
+        Transaction {
+            version: 1,
+            lock_time: 0,
+            input: Vec::new(),
+            output: Vec::new(),
+        }
+    }
+    
+    /// Check if this transaction has witness data
+    pub fn has_witness(&self) -> bool {
+        self.input.iter().any(|input| input.has_witness())
+    }
+    
+    /// Calculate the transaction ID (excluding witness data) - BIP141
+    pub fn txid(&self) -> Hash256 {
+        let serialized = self.consensus_encode_legacy().expect("encoding should not fail");
+        sha256d(&serialized)
+    }
+    
+    /// Calculate the witness transaction ID (including witness data) - BIP141
+    pub fn wtxid(&self) -> Hash256 {
+        if self.has_witness() {
+            let serialized = self.consensus_encode_to_vec().expect("encoding should not fail");
+            sha256d(&serialized)
+        } else {
+            // For non-witness transactions, wtxid == txid
+            self.txid()
+        }
+    }
+    
+    /// Encode transaction in legacy format (without witness data)
+    pub fn consensus_encode_legacy(&self) -> Result<Vec<u8>> {
+        let mut buf = Vec::new();
+        self.version.consensus_encode(&mut buf)?;
+        self.input.consensus_encode(&mut buf)?;
+        self.output.consensus_encode(&mut buf)?;
+        self.lock_time.consensus_encode(&mut buf)?;
+        Ok(buf)
+    }
+    
+    /// Encode witness data for a single input
+    fn encode_witness<W: Write>(witness: &[Vec<u8>], writer: &mut W) -> Result<usize> {
+        let mut written = write_varint(writer, witness.len() as u64)?;
+        for item in witness {
+            written += write_varint(writer, item.len() as u64)?;
+            written += writer.write(item)?;
+        }
+        Ok(written)
+    }
+    
+    /// Decode witness data for a single input
+    fn decode_witness<R: Read>(reader: &mut R) -> Result<Vec<Vec<u8>>> {
+        let len = read_varint(reader)?;
+        let mut witness = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            let item_len = read_varint(reader)?;
+            let mut item = vec![0u8; item_len as usize];
+            reader.read_exact(&mut item)?;
+            witness.push(item);
+        }
+        Ok(witness)
+    }
+}
+
 impl Encodable for Transaction {
     fn consensus_encode<W: Write>(&self, writer: &mut W) -> Result<usize> {
         let mut written = self.version.consensus_encode(writer)?;
+        
+        if self.has_witness() {
+            // BIP141 witness serialization format
+            // marker (0x00) + flag (0x01)
+            written += writer.write(&[0x00, 0x01])?;
+        }
+        
         written += self.input.consensus_encode(writer)?;
         written += self.output.consensus_encode(writer)?;
+        
+        if self.has_witness() {
+            // Encode witness data for each input
+            for input in &self.input {
+                written += Self::encode_witness(&input.witness, writer)?;
+            }
+        }
+        
         written += self.lock_time.consensus_encode(writer)?;
         Ok(written)
+    }
+}
+
+impl Decodable for Transaction {
+    fn consensus_decode<R: Read>(reader: &mut R) -> Result<Self> {
+        let version = i32::consensus_decode(reader)?;
+        
+        // Peek at the next bytes to check for witness marker
+        let mut first_byte = [0u8; 1];
+        reader.read_exact(&mut first_byte)?;
+        
+        let (input, has_witness) = if first_byte[0] == 0x00 {
+            // Potential witness transaction - check flag
+            let mut flag = [0u8; 1];
+            reader.read_exact(&mut flag)?;
+            if flag[0] == 0x01 {
+                // This is a witness transaction
+                let input = Vec::<TxIn>::consensus_decode(reader)?;
+                (input, true)
+            } else {
+                return Err(GdkError::InvalidInput("Invalid witness flag".to_string()));
+            }
+        } else {
+            // This is a legacy transaction, first_byte[0] is the start of input count varint
+            let input_count = if first_byte[0] < 0xfd {
+                first_byte[0] as u64
+            } else if first_byte[0] == 0xfd {
+                let mut buf = [0u8; 2];
+                reader.read_exact(&mut buf)?;
+                u16::from_le_bytes(buf) as u64
+            } else if first_byte[0] == 0xfe {
+                let mut buf = [0u8; 4];
+                reader.read_exact(&mut buf)?;
+                u32::from_le_bytes(buf) as u64
+            } else if first_byte[0] == 0xff {
+                let mut buf = [0u8; 8];
+                reader.read_exact(&mut buf)?;
+                u64::from_le_bytes(buf)
+            } else {
+                return Err(GdkError::InvalidInput("Invalid varint".to_string()));
+            };
+            
+            let mut input = Vec::with_capacity(input_count as usize);
+            for _ in 0..input_count {
+                input.push(TxIn::consensus_decode(reader)?);
+            }
+            (input, false)
+        };
+        
+        let output = Vec::<TxOut>::consensus_decode(reader)?;
+        
+        let mut final_input = input;
+        if has_witness {
+            // Decode witness data for each input
+            for input in &mut final_input {
+                input.witness = Self::decode_witness(reader)?;
+            }
+        }
+        
+        let lock_time = u32::consensus_decode(reader)?;
+        
+        Ok(Transaction {
+            version,
+            lock_time,
+            input: final_input,
+            output,
+        })
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use hex;
 
     #[test]
-    fn test_transaction_encode() {
-        // A simple test transaction (from a real Bitcoin transaction)
+    fn test_legacy_transaction_encode_decode_roundtrip() {
+        // A simple legacy transaction
         let tx = Transaction {
             version: 1,
             lock_time: 0,
             input: vec![TxIn {
                 previous_output: OutPoint {
-                    txid: [0; 32], // Dummy txid
+                    txid: [1; 32], // Dummy txid
                     vout: 0,
                 },
-                script_sig: Script(vec![]),
+                script_sig: Script(vec![0x76, 0xa9, 0x14]), // OP_DUP OP_HASH160 <20 bytes>
                 sequence: 0xffffffff,
+                witness: Vec::new(),
             }],
             output: vec![
                 TxOut {
                     value: 10000000,
-                    script_pubkey: Script(vec![]),
+                    script_pubkey: Script(vec![0x76, 0xa9, 0x14]), // OP_DUP OP_HASH160 <20 bytes>
                 },
             ],
         };
 
+        // Test encoding
+        let encoded = tx.consensus_encode_to_vec().unwrap();
+        assert!(!encoded.is_empty());
+
+        // Test decoding
+        let decoded = Transaction::consensus_decode_from_slice(&encoded).unwrap();
+        assert_eq!(tx, decoded);
+        
+        // Verify it's not a witness transaction
+        assert!(!tx.has_witness());
+        assert!(!decoded.has_witness());
+    }
+
+    #[test]
+    fn test_witness_transaction_encode_decode_roundtrip() {
+        // A witness transaction
+        let mut tx = Transaction {
+            version: 2,
+            lock_time: 500000,
+            input: vec![TxIn {
+                previous_output: OutPoint {
+                    txid: [2; 32], // Dummy txid
+                    vout: 1,
+                },
+                script_sig: Script(vec![]), // Empty script_sig for witness input
+                sequence: 0xfffffffe,
+                witness: vec![
+                    vec![0x30, 0x44, 0x02, 0x20], // Dummy signature
+                    vec![0x03, 0x21], // Dummy pubkey
+                ],
+            }],
+            output: vec![
+                TxOut {
+                    value: 5000000,
+                    script_pubkey: Script(vec![0x00, 0x14]), // OP_0 <20 bytes> (P2WPKH)
+                },
+                TxOut {
+                    value: 4999000,
+                    script_pubkey: Script(vec![0x76, 0xa9, 0x14]), // OP_DUP OP_HASH160 <20 bytes>
+                },
+            ],
+        };
+
+        // Test encoding
+        let encoded = tx.consensus_encode_to_vec().unwrap();
+        assert!(!encoded.is_empty());
+
+        // Test decoding
+        let decoded = Transaction::consensus_decode_from_slice(&encoded).unwrap();
+        assert_eq!(tx, decoded);
+        
+        // Verify it's a witness transaction
+        assert!(tx.has_witness());
+        assert!(decoded.has_witness());
+        assert_eq!(decoded.input[0].witness.len(), 2);
+    }
+
+    #[test]
+    fn test_transaction_ids() {
+        // Create a witness transaction
+        let tx = Transaction {
+            version: 2,
+            lock_time: 0,
+            input: vec![TxIn {
+                previous_output: OutPoint {
+                    txid: [3; 32],
+                    vout: 0,
+                },
+                script_sig: Script(vec![]),
+                sequence: 0xffffffff,
+                witness: vec![
+                    vec![0x01, 0x02, 0x03], // Some witness data
+                ],
+            }],
+            output: vec![
+                TxOut {
+                    value: 1000000,
+                    script_pubkey: Script(vec![0x00, 0x14]), // P2WPKH
+                },
+            ],
+        };
+
+        let txid = tx.txid();
+        let wtxid = tx.wtxid();
+        
+        // For witness transactions, txid and wtxid should be different
+        assert_ne!(txid, wtxid);
+        
+        // Both should be valid 32-byte hashes
+        assert_eq!(txid.len(), 32);
+        assert_eq!(wtxid.len(), 32);
+    }
+
+    #[test]
+    fn test_legacy_transaction_ids_equal() {
+        // Create a legacy transaction (no witness data)
+        let tx = Transaction {
+            version: 1,
+            lock_time: 0,
+            input: vec![TxIn {
+                previous_output: OutPoint {
+                    txid: [4; 32],
+                    vout: 0,
+                },
+                script_sig: Script(vec![0x76, 0xa9]),
+                sequence: 0xffffffff,
+                witness: Vec::new(), // No witness data
+            }],
+            output: vec![
+                TxOut {
+                    value: 1000000,
+                    script_pubkey: Script(vec![0x76, 0xa9, 0x14]),
+                },
+            ],
+        };
+
+        let txid = tx.txid();
+        let wtxid = tx.wtxid();
+        
+        // For legacy transactions, txid and wtxid should be the same
+        assert_eq!(txid, wtxid);
+    }
+
+    #[test]
+    fn test_outpoint_null() {
+        let null_outpoint = OutPoint::null();
+        assert!(null_outpoint.is_null());
+        assert_eq!(null_outpoint.txid, [0; 32]);
+        assert_eq!(null_outpoint.vout, 0xffffffff);
+        
+        let normal_outpoint = OutPoint::new([1; 32], 0);
+        assert!(!normal_outpoint.is_null());
+    }
+
+    #[test]
+    fn test_script_operations() {
+        let script = Script::new();
+        assert!(script.is_empty());
+        assert_eq!(script.len(), 0);
+        
+        let script_with_data = Script::from_bytes(vec![0x76, 0xa9, 0x14]);
+        assert!(!script_with_data.is_empty());
+        assert_eq!(script_with_data.len(), 3);
+        assert_eq!(script_with_data.as_bytes(), &[0x76, 0xa9, 0x14]);
+    }
+
+    #[test]
+    fn test_witness_encoding_decoding() {
+        let witness_data = vec![
+            vec![0x30, 0x44, 0x02, 0x20, 0x01], // signature
+            vec![0x03, 0x21, 0x02], // pubkey
+        ];
+        
         let mut buffer = Vec::new();
-        let bytes_written = tx.consensus_encode(&mut buffer).unwrap();
-        assert!(bytes_written > 0);
+        Transaction::encode_witness(&witness_data, &mut buffer).unwrap();
+        
+        let mut cursor = std::io::Cursor::new(&buffer);
+        let decoded_witness = Transaction::decode_witness(&mut cursor).unwrap();
+        
+        assert_eq!(witness_data, decoded_witness);
+    }
+
+    #[test]
+    fn test_empty_witness_encoding() {
+        let empty_witness: Vec<Vec<u8>> = Vec::new();
+        
+        let mut buffer = Vec::new();
+        Transaction::encode_witness(&empty_witness, &mut buffer).unwrap();
+        
+        let mut cursor = std::io::Cursor::new(&buffer);
+        let decoded_witness = Transaction::decode_witness(&mut cursor).unwrap();
+        
+        assert_eq!(empty_witness, decoded_witness);
+        assert!(decoded_witness.is_empty());
     }
 }

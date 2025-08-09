@@ -7,6 +7,14 @@ edition = "2021"
 name = "gdk_rs"
 path = "src/lib.rs"
 
+[[bin]]
+name = "test_auth_standalone"
+path = "test_auth_standalone.rs"
+
+[[bin]]
+name = "test_hw_auth_standalone"
+path = "test_hw_auth_standalone.rs"
+
 [dependencies]
 # Async runtime
 tokio = { version = "1", features = ["full"] }
@@ -15,6 +23,7 @@ uuid = { version = "1", features = ["v4", "serde"] }
 # Serialization/Deserialization
 serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
+serde_with = "3.0"
 
 # HTTP Client
 reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
@@ -25,6 +34,8 @@ reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-feature
 
 # Cryptography
 base58check = "0.1.0"
+base58 = "0.2"
+bech32 = "0.9"
 hmac = "0.12"
 aes-gcm = "0.10"
 # bip39 = "2.0" # Reimplementing necessary parts
@@ -34,6 +45,8 @@ hex = "0.4"
 ripemd = "0.1"
 sha2 = "0.10"
 rand = "0.8"
+subtle = "2.5"
+async-trait = "0.1"
 tokio-tungstenite = "0.21"
 futures-util = "0.3"
 
