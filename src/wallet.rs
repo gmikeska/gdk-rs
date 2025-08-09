@@ -1,7 +1,7 @@
 //! Wallet logic, including key management and signing.
 
-use crate::primitives::bip32::ExtendedPrivKey;
 use crate::bip39::{Mnemonic, Seed};
+use crate::primitives::bip32::ExtendedPrivKey;
 use crate::Result;
 
 pub struct Wallet {
@@ -10,9 +10,9 @@ pub struct Wallet {
 
 impl Wallet {
     pub fn from_mnemonic(mnemonic_str: &str) -> Result<Self> {
-        // Placeholder implementation
-        let seed = [0u8; 64];
-        let master_key = ExtendedPrivKey::new_master_from_seed(&seed)?;
+        let mnemonic = Mnemonic::from_phrase(mnemonic_str)?;
+        let seed = Seed::new(&mnemonic, "");
+        let master_key = ExtendedPrivKey::new_master_from_seed(&seed.0)?;
         Ok(Wallet { master_key })
     }
 }
