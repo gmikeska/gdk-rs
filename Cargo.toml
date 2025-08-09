@@ -1,6 +1,53 @@
 [package]
 name = "gdk-rs"
 version = "0.1.0"
-edition = "2024"
+edition = "2021"
+
+[lib]
+name = "gdk_rs"
+path = "src/lib.rs"
 
 [dependencies]
+# Async runtime
+tokio = { version = "1", features = ["full"] }
+uuid = { version = "1", features = ["v4", "serde"] }
+
+# Serialization/Deserialization
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+
+# HTTP Client
+reqwest = { version = "0.11", features = ["json", "rustls-tls"], default-features = false }
+
+# Bitcoin & Liquid
+# bitcoin = "0.31" # Reimplementing necessary parts.
+# elements = "0.22" # Not usable, will reimplement necessary parts.
+
+# Cryptography
+base58check = "0.1.0"
+hmac = "0.12"
+aes-gcm = "0.10"
+# bip39 = "2.0" # Reimplementing necessary parts
+pbkdf2 = "0.11"
+secp256k1 = { version = "0.28", features = ["global-context", "recovery", "serde"] }
+hex = "0.4"
+ripemd = "0.1"
+sha2 = "0.10"
+rand = "0.8"
+tokio-tungstenite = "0.21"
+futures-util = "0.3"
+
+# Error Handling & Logging
+thiserror = "1.0"
+log = "0.4"
+env_logger = "0.11"
+
+[features]
+default = []
+hardware-wallets = []
+tor-support = []
+
+[dev-dependencies]
+axum = { version = "0.7", features = ["ws", "macros"] }
+tower-http = { version = "0.5", features = ["fs"] }
+base64 = "0.21"
