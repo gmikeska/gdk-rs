@@ -7,6 +7,7 @@ use crate::Result;
 use hmac::Hmac;
 use sha2::{Digest, Sha512, Sha256};
 
+#[derive(Debug)]
 pub struct Mnemonic {
     phrase: String,
 }
@@ -52,13 +53,56 @@ impl Mnemonic {
     }
 
     pub fn from_phrase(phrase: &str) -> Result<Self> {
-        let words: Vec<&str> = phrase.split(' ').collect();
-        if words.len() != 12 && words.len() != 24 {
-            return Err(crate::GdkError::InvalidInput("Invalid word count".to_string()));
+        log::debug!("Parsing phrase: {}", phrase);
+        let words: Vec<&str> = phrase.split_whitespace().collect();
+        let num_words = words.len();
+
+        if num_words != 12 && num_words != 24 {
+            return Err(crate::GdkError::InvalidInput(format!("Invalid word count: {}", num_words)));
         }
 
-        // This is a placeholder, a full implementation would do the reverse
-        // of from_entropy, including checksum validation.
+        let mut bits = Vec::with_capacity(num_words * 11);
+        for word in words {
+            log::debug!("Searching for word: '{}'", word);
+            match WORDLIST.binary_search(&word) {
+                Ok(index) => {
+                    log::debug!("Found word {} at index {}", word, index);
+                    for i in 0..11 {
+                        bits.push((index >> (10 - i)) & 1 == 1);
+                    }
+                }
+                Err(e) => {
+                    log::error!("Word not found: '{}', search error: {:?}", word, e);
+                    return Err(crate::GdkError::InvalidInput(format!("Invalid word: {}", word)));
+                }
+            }
+        }
+
+        let checksum_len = num_words / 3;
+        let entropy_len = num_words * 11 - checksum_len;
+        let entropy_bytes_len = entropy_len / 8;
+
+        let mut entropy = vec![0u8; entropy_bytes_len];
+        for i in 0..entropy_len {
+            if bits[i] {
+                entropy[i / 8] |= 1 << (7 - (i % 8));
+            }
+        }
+
+        let hash = Sha256::digest(&entropy);
+        let checksum = hash[0];
+
+        log::debug!("Calculated checksum byte: {:08b}", checksum);
+
+        for i in 0..checksum_len {
+            let expected_bit = bits[entropy_len + i];
+            let actual_bit = (checksum >> (7 - i)) & 1 == 1;
+            log::debug!("Checksum bit {}: expected={}, actual={}", i, expected_bit, actual_bit);
+            if expected_bit != actual_bit {
+                return Err(crate::GdkError::InvalidInput("Invalid checksum".to_string()));
+            }
+        }
+
         Ok(Mnemonic { phrase: phrase.to_string() })
     }
 }
@@ -100,5 +144,28 @@ mod tests {
         let seed = Seed::new(&mnemonic, "TREZOR");
         let expected_seed_hex = "c55257c360c07c72029aebc1b53c05ed0362ada38ead3e3e9efa3708e53495531f09a6987599d18264c1e1c92f2cf141630c7a3c4ab7c81b2f001698e7463b04";
         assert_eq!(hex::encode(seed.0), expected_seed_hex);
+    }
+
+    #[test]
+    fn test_from_phrase() {
+        let phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+        let mnemonic = Mnemonic::from_phrase(phrase);
+        assert!(mnemonic.is_ok());
+
+        let invalid_phrase = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon"; // 11 words
+        assert!(Mnemonic::from_phrase(invalid_phrase).is_err());
+
+        let invalid_checksum = "zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo zoo wrong";
+        let result = Mnemonic::from_phrase(invalid_checksum);
+        if result.is_ok() {
+            panic!("Should have failed on invalid word, but got Ok({:?})", result.unwrap());
+        }
+    }
+
+    #[test]
+    fn test_wordlist_is_sorted() {
+        let mut sorted_list = wordlist::WORDLIST;
+        sorted_list.sort_unstable();
+        assert_eq!(wordlist::WORDLIST, sorted_list, "BIP39 wordlist is not sorted");
     }
 }
