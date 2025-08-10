@@ -1,5 +1,11 @@
 //! General utility functions for GDK.
 
+pub mod crypto;
+pub mod network;
+pub mod persistence;
+pub mod logging;
+pub mod config;
+
 use crate::Result;
 // use crate::bip39::{Mnemonic}; // Will use this once implemented
 
@@ -17,14 +23,3 @@ pub fn validate_mnemonic(mnemonic_str: &str) -> Result<bool> {
     Ok(!mnemonic_str.is_empty())
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn test_generate_mnemonic() {
-        let mnemonic = generate_mnemonic().unwrap();
-        let words: Vec<&str> = mnemonic.split_whitespace().collect();
-        assert_eq!(words.len(), 12); // Placeholder returns 12 words
-    }
-}

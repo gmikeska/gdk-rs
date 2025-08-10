@@ -4,16 +4,254 @@
 
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::time::{Duration, Instant};
+use crate::error::GdkError;
+use crate::Result;
 
 use uuid::Uuid;
 
-// Represents a generic call that can be sent to the server.
+/// JSON-RPC 2.0 version constant
+pub const JSONRPC_VERSION: &str = "2.0";
+
+/// JSON-RPC 2.0 Request
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct JsonRpcRequest {
+    pub jsonrpc: String,
+    pub method: String,
+    pub params: Option<serde_json::Value>,
+    pub id: Option<serde_json::Value>,
+}
+
+impl JsonRpcRequest {
+    pub fn new(method: String, params: Option<serde_json::Value>) -> Self {
+        Self {
+            jsonrpc: JSONRPC_VERSION.to_string(),
+            method,
+            params,
+            id: Some(serde_json::Value::String(Uuid::new_v4().to_string())),
+        }
+    }
+
+    pub fn new_notification(method: String, params: Option<serde_json::Value>) -> Self {
+        Self {
+            jsonrpc: JSONRPC_VERSION.to_string(),
+            method,
+            params,
+            id: None, // Notifications don't have IDs
+        }
+    }
+
+    pub fn with_id(method: String, params: Option<serde_json::Value>, id: serde_json::Value) -> Self {
+        Self {
+            jsonrpc: JSONRPC_VERSION.to_string(),
+            method,
+            params,
+            id: Some(id),
+        }
+    }
+}
+
+/// JSON-RPC 2.0 Response
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct JsonRpcResponse {
+    pub jsonrpc: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub result: Option<serde_json::Value>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<JsonRpcError>,
+    pub id: Option<serde_json::Value>,
+}
+
+impl JsonRpcResponse {
+    pub fn success(result: serde_json::Value, id: Option<serde_json::Value>) -> Self {
+        Self {
+            jsonrpc: JSONRPC_VERSION.to_string(),
+            result: Some(result),
+            error: None,
+            id,
+        }
+    }
+
+    pub fn error(error: JsonRpcError, id: Option<serde_json::Value>) -> Self {
+        Self {
+            jsonrpc: JSONRPC_VERSION.to_string(),
+            result: None,
+            error: Some(error),
+            id,
+        }
+    }
+}
+
+/// JSON-RPC 2.0 Error
+#[derive(Serialize, Deserialize, Debug, Clone, PartialEq)]
+pub struct JsonRpcError {
+    pub code: i32,
+    pub message: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub data: Option<serde_json::Value>,
+}
+
+impl JsonRpcError {
+    // Standard JSON-RPC 2.0 error codes
+    pub const PARSE_ERROR: i32 = -32700;
+    pub const INVALID_REQUEST: i32 = -32600;
+    pub const METHOD_NOT_FOUND: i32 = -32601;
+    pub const INVALID_PARAMS: i32 = -32602;
+    pub const INTERNAL_ERROR: i32 = -32603;
+
+    pub fn parse_error() -> Self {
+        Self {
+            code: Self::PARSE_ERROR,
+            message: "Parse error".to_string(),
+            data: None,
+        }
+    }
+
+    pub fn invalid_request() -> Self {
+        Self {
+            code: Self::INVALID_REQUEST,
+            message: "Invalid Request".to_string(),
+            data: None,
+        }
+    }
+
+    pub fn method_not_found() -> Self {
+        Self {
+            code: Self::METHOD_NOT_FOUND,
+            message: "Method not found".to_string(),
+            data: None,
+        }
+    }
+
+    pub fn invalid_params() -> Self {
+        Self {
+            code: Self::INVALID_PARAMS,
+            message: "Invalid params".to_string(),
+            data: None,
+        }
+    }
+
+    pub fn internal_error() -> Self {
+        Self {
+            code: Self::INTERNAL_ERROR,
+            message: "Internal error".to_string(),
+            data: None,
+        }
+    }
+
+    pub fn custom(code: i32, message: String, data: Option<serde_json::Value>) -> Self {
+        Self { code, message, data }
+    }
+}
+
+impl From<JsonRpcError> for GdkError {
+    fn from(error: JsonRpcError) -> Self {
+        GdkError::Network(format!("JSON-RPC Error {}: {}", error.code, error.message))
+    }
+}
+
+/// Batch request containing multiple JSON-RPC requests
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct JsonRpcBatchRequest(pub Vec<JsonRpcRequest>);
+
+impl JsonRpcBatchRequest {
+    pub fn new() -> Self {
+        Self(Vec::new())
+    }
+
+    pub fn add_request(&mut self, request: JsonRpcRequest) {
+        self.0.push(request);
+    }
+
+    pub fn len(&self) -> usize {
+        self.0.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.0.is_empty()
+    }
+}
+
+/// Batch response containing multiple JSON-RPC responses
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct JsonRpcBatchResponse(pub Vec<JsonRpcResponse>);
+
+/// Request tracking information for timeout and correlation
+#[derive(Debug, Clone)]
+pub struct PendingRequest {
+    pub id: serde_json::Value,
+    pub method: String,
+    pub created_at: Instant,
+    pub timeout: Duration,
+}
+
+impl PendingRequest {
+    pub fn new(id: serde_json::Value, method: String, timeout: Duration) -> Self {
+        Self {
+            id,
+            method,
+            created_at: Instant::now(),
+            timeout,
+        }
+    }
+
+    pub fn is_expired(&self) -> bool {
+        self.created_at.elapsed() > self.timeout
+    }
+}
+
+/// JSON-RPC method validation
+pub struct MethodValidator;
+
+impl MethodValidator {
+    /// Validate method name according to JSON-RPC 2.0 specification
+    pub fn validate_method_name(method: &str) -> Result<()> {
+        if method.is_empty() {
+            return Err(GdkError::InvalidInput("Method name cannot be empty".to_string()));
+        }
+
+        if method.starts_with("rpc.") {
+            return Err(GdkError::InvalidInput("Method names starting with 'rpc.' are reserved".to_string()));
+        }
+
+        // Check for valid characters (alphanumeric, underscore, dot, hyphen)
+        if !method.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '-') {
+            return Err(GdkError::InvalidInput("Method name contains invalid characters".to_string()));
+        }
+
+        Ok(())
+    }
+
+    /// Validate request parameters
+    pub fn validate_params(params: &Option<serde_json::Value>) -> Result<()> {
+        if let Some(params) = params {
+            match params {
+                serde_json::Value::Object(_) | serde_json::Value::Array(_) => Ok(()),
+                _ => Err(GdkError::InvalidInput("Parameters must be an Object or Array".to_string())),
+            }
+        } else {
+            Ok(())
+        }
+    }
+}
+
+// Represents a generic call that can be sent to the server (legacy compatibility).
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct MethodCall {
     #[serde(default = "Uuid::new_v4")]
     pub id: Uuid,
     pub method: String,
     pub params: serde_json::Value,
+}
+
+impl From<MethodCall> for JsonRpcRequest {
+    fn from(call: MethodCall) -> Self {
+        JsonRpcRequest::with_id(
+            call.method,
+            Some(call.params),
+            serde_json::Value::String(call.id.to_string()),
+        )
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

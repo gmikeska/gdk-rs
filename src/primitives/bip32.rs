@@ -1,7 +1,6 @@
 //! BIP32 Hierarchical Deterministic Keys.
 
 use crate::{GdkError, Result};
-use base58check::{FromBase58Check, ToBase58Check};
 use serde::{Deserialize, Serialize};
 use hmac::{Hmac, Mac};
 use ripemd::Ripemd160;
@@ -265,23 +264,11 @@ impl ExtendedPrivateKey {
 
         let (key_bytes, chain_code_bytes) = result.split_at(32);
 
-        // Parse the key bytes as a scalar
-        let mut key_scalar = [0u8; 32];
-        key_scalar.copy_from_slice(key_bytes);
-
-        // Add the parent private key to the derived key
-        let parent_key_bytes = self.private_key.secret_bytes();
-        let mut child_key_bytes = [0u8; 32];
-
-        // Perform scalar addition modulo the curve order
-        let mut carry = 0u64;
-        for i in (0..32).rev() {
-            let sum = parent_key_bytes[i] as u64 + key_scalar[i] as u64 + carry;
-            child_key_bytes[i] = sum as u8;
-            carry = sum >> 8;
-        }
-
-        let child_private_key = SecretKey::from_slice(&child_key_bytes)
+        // Use secp256k1 to properly handle scalar addition modulo curve order
+        let scalar = SecretKey::from_slice(key_bytes)
+            .map_err(|e| GdkError::InvalidInput(format!("Invalid scalar: {}", e)))?;
+        
+        let child_private_key = self.private_key.add_tweak(&secp256k1::Scalar::from(scalar))
             .map_err(|e| GdkError::InvalidInput(format!("Invalid child private key: {}", e)))?;
 
         let mut child_chain_code = [0u8; 32];
@@ -353,8 +340,35 @@ impl ExtendedPrivateKey {
         data.push(0x00);
         data.extend_from_slice(&self.private_key.secret_bytes());
 
-        // Use base58check encoding which handles checksum automatically
-        data.to_base58check(0) // Version is already included in data
+        // Add checksum and encode to base58
+        let checksum = Sha256::digest(&Sha256::digest(&data));
+        data.extend_from_slice(&checksum[..4]);
+        
+        // Manual base58 encoding
+        const ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+        let mut encoded = Vec::new();
+        let mut num = data.iter().fold(num_bigint::BigUint::from(0u32), |acc, &byte| {
+            (acc << 8) + num_bigint::BigUint::from(byte)
+        });
+        
+        while num > num_bigint::BigUint::from(0u32) {
+            let remainder = &num % 58u32;
+            let digit = remainder.to_u32_digits().first().copied().unwrap_or(0);
+            encoded.push(ALPHABET[digit as usize]);
+            num /= 58u32;
+        }
+        
+        // Add leading '1's for leading zero bytes
+        for &byte in data.iter() {
+            if byte == 0 {
+                encoded.push(b'1');
+            } else {
+                break;
+            }
+        }
+        
+        encoded.reverse();
+        String::from_utf8(encoded).unwrap()
     }
 }
 
@@ -362,14 +376,49 @@ impl FromStr for ExtendedPrivateKey {
     type Err = GdkError;
 
     fn from_str(s: &str) -> Result<Self> {
-        let (version_byte, data) = s.from_base58check()
-            .map_err(|e| GdkError::InvalidInput(format!("Invalid base58check: {:?}", e)))?;
+        // Manual base58 decoding
+        const ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+        let mut num = num_bigint::BigUint::from(0u32);
+        
+        for &ch in s.as_bytes() {
+            let digit = ALPHABET.iter().position(|&c| c == ch)
+                .ok_or_else(|| GdkError::InvalidInput("Invalid base58 character".to_string()))?;
+            num = num * 58u32 + num_bigint::BigUint::from(digit);
+        }
+        
+        let mut bytes = if num == num_bigint::BigUint::from(0u32) {
+            vec![]
+        } else {
+            num.to_bytes_be()
+        };
+        
+        // Add leading zeros for leading '1's
+        for &ch in s.as_bytes() {
+            if ch == b'1' {
+                bytes.insert(0, 0);
+            } else {
+                break;
+            }
+        }
+        
+        let data = bytes;
 
-        if data.len() != 77 {
+        if data.len() != 82 {
             return Err(GdkError::InvalidInput(
-                "Invalid extended private key length".to_string(),
+                format!("Invalid extended private key length: {} expected 82", data.len()),
             ));
         }
+        
+        // Verify checksum
+        let (payload, checksum) = data.split_at(78);
+        let computed_checksum = Sha256::digest(&Sha256::digest(payload));
+        if checksum != &computed_checksum[..4] {
+            return Err(GdkError::InvalidInput(
+                "Invalid checksum".to_string(),
+            ));
+        }
+        
+        let data = payload.to_vec();
 
         // Parse version
         let version = [data[0], data[1], data[2], data[3]];
@@ -400,7 +449,7 @@ impl FromStr for ExtendedPrivateKey {
             ));
         }
 
-        let private_key = SecretKey::from_slice(&data[46..77])
+        let private_key = SecretKey::from_slice(&data[46..78])
             .map_err(|e| GdkError::InvalidInput(format!("Invalid private key: {}", e)))?;
 
         Ok(ExtendedPrivateKey {
@@ -500,7 +549,35 @@ impl ExtendedPublicKey {
         // Public key (33 bytes compressed)
         data.extend_from_slice(&self.public_key.serialize());
 
-        data.to_base58check(0) // Version is already included in data
+        // Add checksum and encode to base58
+        let checksum = Sha256::digest(&Sha256::digest(&data));
+        data.extend_from_slice(&checksum[..4]);
+        
+        // Manual base58 encoding
+        const ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+        let mut encoded = Vec::new();
+        let mut num = data.iter().fold(num_bigint::BigUint::from(0u32), |acc, &byte| {
+            (acc << 8) + num_bigint::BigUint::from(byte)
+        });
+        
+        while num > num_bigint::BigUint::from(0u32) {
+            let remainder = &num % 58u32;
+            let digit = remainder.to_u32_digits().first().copied().unwrap_or(0);
+            encoded.push(ALPHABET[digit as usize]);
+            num /= 58u32;
+        }
+        
+        // Add leading '1's for leading zero bytes
+        for &byte in data.iter() {
+            if byte == 0 {
+                encoded.push(b'1');
+            } else {
+                break;
+            }
+        }
+        
+        encoded.reverse();
+        String::from_utf8(encoded).unwrap()
     }
 }
 
@@ -508,14 +585,49 @@ impl FromStr for ExtendedPublicKey {
     type Err = GdkError;
 
     fn from_str(s: &str) -> Result<Self> {
-        let (version_byte, data) = s.from_base58check()
-            .map_err(|e| GdkError::InvalidInput(format!("Invalid base58check: {:?}", e)))?;
+        // Manual base58 decoding
+        const ALPHABET: &[u8] = b"123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz";
+        let mut num = num_bigint::BigUint::from(0u32);
+        
+        for &ch in s.as_bytes() {
+            let digit = ALPHABET.iter().position(|&c| c == ch)
+                .ok_or_else(|| GdkError::InvalidInput("Invalid base58 character".to_string()))?;
+            num = num * 58u32 + num_bigint::BigUint::from(digit);
+        }
+        
+        let mut bytes = if num == num_bigint::BigUint::from(0u32) {
+            vec![]
+        } else {
+            num.to_bytes_be()
+        };
+        
+        // Add leading zeros for leading '1's
+        for &ch in s.as_bytes() {
+            if ch == b'1' {
+                bytes.insert(0, 0);
+            } else {
+                break;
+            }
+        }
+        
+        let data = bytes;
 
-        if data.len() != 77 {
+        if data.len() != 82 {
             return Err(GdkError::InvalidInput(
-                "Invalid extended public key length".to_string(),
+                format!("Invalid extended public key length: {} expected 82", data.len()),
             ));
         }
+        
+        // Verify checksum
+        let (payload, checksum) = data.split_at(78);
+        let computed_checksum = Sha256::digest(&Sha256::digest(payload));
+        if checksum != &computed_checksum[..4] {
+            return Err(GdkError::InvalidInput(
+                "Invalid checksum".to_string(),
+            ));
+        }
+        
+        let data = payload.to_vec();
 
         // Parse version
         let version = [data[0], data[1], data[2], data[3]];
@@ -589,7 +701,7 @@ mod tests {
     fn test_derivation_path_parsing() {
         // Test master path
         let path = DerivationPath::from_str("m").unwrap();
-        assert_eq!(path.path(), &[]);
+        assert_eq!(path.path(), &[] as &[u32]);
         assert_eq!(path.to_string(), "m");
 
         // Test simple path

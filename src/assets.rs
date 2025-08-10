@@ -776,17 +776,17 @@ impl AssetRegistry {
 
         // Create directory if it doesn't exist
         tokio::fs::create_dir_all(registry_dir).await
-            .map_err(|e| GdkError::Io(e))?;
+            .map_err(|e| GdkError::Io(e.to_string()))?;
 
         let registry_file = registry_dir.join("assets.json");
         let cache = self.cache.read().unwrap();
         let assets: Vec<Asset> = cache.values().cloned().collect();
 
         let json_data = serde_json::to_string_pretty(&assets)
-            .map_err(|e| GdkError::Json(e))?;
+            .map_err(|e| GdkError::Json(e.to_string()))?;
 
         tokio::fs::write(&registry_file, json_data).await
-            .map_err(|e| GdkError::Io(e))?;
+            .map_err(|e| GdkError::Io(e.to_string()))?;
 
         log::info!("Saved {} assets to {}", assets.len(), registry_file.display());
         Ok(())
@@ -807,10 +807,10 @@ impl AssetRegistry {
         }
 
         let json_data = tokio::fs::read_to_string(&registry_file).await
-            .map_err(|e| GdkError::Io(e))?;
+            .map_err(|e| GdkError::Io(e.to_string()))?;
 
         let assets: Vec<Asset> = serde_json::from_str(&json_data)
-            .map_err(|e| GdkError::Json(e))?;
+            .map_err(|e| GdkError::Json(e.to_string()))?;
 
         let mut loaded_count = 0;
         for asset in assets {

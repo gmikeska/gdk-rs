@@ -1,10 +1,7 @@
 //! Tests for the simplified wallet subaccount management system
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::wallet_simple::{Wallet, SubaccountType, Subaccount};
-    use crate::primitives::address::Network;
+use gdk_rs::wallet_simple::{Wallet, SubaccountType, Subaccount};
+use gdk_rs::primitives::address::Network;
 
     #[test]
     fn test_subaccount_type_properties() {
@@ -37,9 +34,9 @@ mod tests {
         
         // Should be m/44'/0'/0'
         let expected_path = vec![
-            crate::primitives::bip32::DerivationPath::hardened(44),
-            crate::primitives::bip32::DerivationPath::hardened(0),
-            crate::primitives::bip32::DerivationPath::hardened(0),
+            gdk_rs::primitives::bip32::DerivationPath::hardened(44),
+            gdk_rs::primitives::bip32::DerivationPath::hardened(0),
+            gdk_rs::primitives::bip32::DerivationPath::hardened(0),
         ];
         assert_eq!(path.path(), &expected_path);
     }
@@ -204,9 +201,9 @@ mod tests {
         // Test receiving address path (m/44'/1'/0'/0/0)
         let receive_path = subaccount.address_path(false, 0);
         let expected_receive = vec![
-            crate::primitives::bip32::DerivationPath::hardened(44), // purpose
-            crate::primitives::bip32::DerivationPath::hardened(1),  // coin_type (testnet)
-            crate::primitives::bip32::DerivationPath::hardened(0),  // account
+            gdk_rs::primitives::bip32::DerivationPath::hardened(44), // purpose
+            gdk_rs::primitives::bip32::DerivationPath::hardened(1),  // coin_type (testnet)
+            gdk_rs::primitives::bip32::DerivationPath::hardened(0),  // account
             0, // change (external)
             0, // address_index
         ];
@@ -215,9 +212,9 @@ mod tests {
         // Test change address path (m/44'/1'/0'/1/5)
         let change_path = subaccount.address_path(true, 5);
         let expected_change = vec![
-            crate::primitives::bip32::DerivationPath::hardened(44), // purpose
-            crate::primitives::bip32::DerivationPath::hardened(1),  // coin_type (testnet)
-            crate::primitives::bip32::DerivationPath::hardened(0),  // account
+            gdk_rs::primitives::bip32::DerivationPath::hardened(44), // purpose
+            gdk_rs::primitives::bip32::DerivationPath::hardened(1),  // coin_type (testnet)
+            gdk_rs::primitives::bip32::DerivationPath::hardened(0),  // account
             1, // change (internal)
             5, // address_index
         ];
@@ -262,14 +259,13 @@ mod tests {
         // Verify each subaccount has the correct type and derivation path
         let legacy = wallet.get_subaccount(legacy_id).unwrap();
         let legacy_path = legacy.address_path(false, 0);
-        assert_eq!(legacy_path.path()[0], crate::primitives::bip32::DerivationPath::hardened(44));
+        assert_eq!(legacy_path.path()[0], gdk_rs::primitives::bip32::DerivationPath::hardened(44));
         
         let wrapped = wallet.get_subaccount(wrapped_id).unwrap();
         let wrapped_path = wrapped.address_path(false, 0);
-        assert_eq!(wrapped_path.path()[0], crate::primitives::bip32::DerivationPath::hardened(49));
+        assert_eq!(wrapped_path.path()[0], gdk_rs::primitives::bip32::DerivationPath::hardened(49));
         
         let native = wallet.get_subaccount(native_id).unwrap();
         let native_path = native.address_path(false, 0);
-        assert_eq!(native_path.path()[0], crate::primitives::bip32::DerivationPath::hardened(84));
+        assert_eq!(native_path.path()[0], gdk_rs::primitives::bip32::DerivationPath::hardened(84));
     }
-}

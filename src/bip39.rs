@@ -295,24 +295,34 @@ impl Mnemonic {
         let checksum_bits = entropy_bits / 32;
         let checksum = hash[0] >> (8 - checksum_bits);
 
-        // Combine entropy and checksum
-        let mut combined = entropy.to_vec();
-        combined.push(checksum);
-
-        // Convert to 11-bit indices
-        let word_count = (entropy_bits + checksum_bits) / 11;
+        // Create a bit stream from entropy and checksum
+        let total_bits = entropy_bits + checksum_bits;
+        let word_count = total_bits / 11;
         let mut indices = Vec::with_capacity(word_count);
         
-        let mut bit_buffer = 0u32;
+        let mut bit_buffer = 0u64;
         let mut bits_in_buffer = 0;
         
-        for &byte in &combined {
-            bit_buffer = (bit_buffer << 8) | (byte as u32);
+        // Process entropy bytes
+        for &byte in entropy {
+            bit_buffer = (bit_buffer << 8) | (byte as u64);
             bits_in_buffer += 8;
             
             while bits_in_buffer >= 11 {
-                let index = (bit_buffer >> (bits_in_buffer - 11)) & 0x7FF;
-                indices.push(index as usize);
+                let index = ((bit_buffer >> (bits_in_buffer - 11)) & 0x7FF) as usize;
+                indices.push(index);
+                bits_in_buffer -= 11;
+            }
+        }
+        
+        // Add checksum bits
+        if checksum_bits > 0 {
+            bit_buffer = (bit_buffer << checksum_bits) | (checksum as u64);
+            bits_in_buffer += checksum_bits;
+            
+            while bits_in_buffer >= 11 && indices.len() < word_count {
+                let index = ((bit_buffer >> (bits_in_buffer - 11)) & 0x7FF) as usize;
+                indices.push(index);
                 bits_in_buffer -= 11;
             }
         }
@@ -385,24 +395,24 @@ impl Mnemonic {
         let entropy_bits = (total_bits * 32) / 33;
         let checksum_bits = total_bits - entropy_bits;
 
-        let mut bit_buffer = 0u32;
+        let mut bit_buffer = 0u64;
         let mut bits_in_buffer = 0;
         let mut entropy_bytes = Vec::new();
 
         for &index in &indices {
-            bit_buffer = (bit_buffer << 11) | (index as u32);
+            bit_buffer = (bit_buffer << 11) | (index as u64);
             bits_in_buffer += 11;
 
             while bits_in_buffer >= 8 && entropy_bytes.len() < entropy_bits / 8 {
-                let byte = (bit_buffer >> (bits_in_buffer - 8)) & 0xFF;
-                entropy_bytes.push(byte as u8);
+                let byte = ((bit_buffer >> (bits_in_buffer - 8)) & 0xFF) as u8;
+                entropy_bytes.push(byte);
                 bits_in_buffer -= 8;
             }
         }
 
         // Extract checksum from remaining bits
-        let checksum_mask = (1 << checksum_bits) - 1;
-        let provided_checksum = (bit_buffer & checksum_mask) as u8;
+        let checksum_mask = (1u64 << checksum_bits) - 1;
+        let provided_checksum = ((bit_buffer >> (bits_in_buffer - checksum_bits)) & checksum_mask) as u8;
 
         // Calculate expected checksum
         let hash = Sha256::digest(&entropy_bytes);

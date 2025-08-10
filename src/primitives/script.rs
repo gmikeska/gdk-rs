@@ -1215,13 +1215,13 @@ mod tests {
     #[test]
     fn test_script_execution_checksig() {
         // Test OP_CHECKSIG with valid-looking signature and pubkey
-        let signature = vec![0x30, 0x44, 0x02, 0x20]; // DER signature prefix
+        let mut signature = vec![0x30, 0x44, 0x02, 0x20]; // DER signature prefix
         signature.extend_from_slice(&[0x12; 32]); // r value
         signature.extend_from_slice(&[0x02, 0x20]); // s prefix
         signature.extend_from_slice(&[0x34; 32]); // s value
         signature.push(0x01); // SIGHASH_ALL
         
-        let pubkey = vec![0x02]; // Compressed pubkey prefix
+        let mut pubkey = vec![0x02]; // Compressed pubkey prefix
         pubkey.extend_from_slice(&[0x56; 32]); // x coordinate
         
         let mut script_bytes = vec![];
@@ -1251,12 +1251,12 @@ mod tests {
     #[test]
     fn test_script_execution_multisig() {
         // Test simple 1-of-2 multisig
-        let signature = vec![0x30, 0x44]; // Simplified signature
+        let mut signature = vec![0x30, 0x44]; // Simplified signature
         signature.extend_from_slice(&[0x12; 66]);
         
-        let pubkey1 = vec![0x02];
+        let mut pubkey1 = vec![0x02];
         pubkey1.extend_from_slice(&[0x11; 32]);
-        let pubkey2 = vec![0x03];
+        let mut pubkey2 = vec![0x03];
         pubkey2.extend_from_slice(&[0x22; 32]);
         
         let mut script_bytes = vec![];
@@ -1297,7 +1297,7 @@ mod tests {
         let result = script.execute(&mut stack, None);
         assert!(result.is_ok());
         assert_eq!(stack.len(), 4);
-        assert_eq!(stack[0], vec![]); // OP_0 pushes empty
+        assert_eq!(stack[0], vec![] as Vec<u8>); // OP_0 pushes empty
         assert_eq!(stack[1], vec![0x01]); // OP_1
         assert_eq!(stack[2], vec![0x02]); // OP_2
         assert_eq!(stack[3], vec![0x10]); // OP_16
@@ -1350,9 +1350,9 @@ mod tests {
         let script = Script::new();
         
         // Test with valid-looking inputs
-        let signature = vec![0x30, 0x44]; // DER prefix
+        let mut signature = vec![0x30, 0x44]; // DER prefix
         signature.extend_from_slice(&[0x12; 66]); // Valid length signature
-        let pubkey = vec![0x02]; // Compressed pubkey
+        let mut pubkey = vec![0x02]; // Compressed pubkey
         pubkey.extend_from_slice(&[0x34; 32]);
         let message_hash = [0x56; 32];
         
@@ -1368,7 +1368,8 @@ mod tests {
 
     #[test]
     fn test_script_num_conversion() {
-        let executor = ScriptExecutor::new(&mut vec![], None);
+        let mut stack = vec![];
+        let executor = ScriptExecutor::new(&mut stack, None);
         
         // Test positive number
         assert_eq!(executor.script_num_to_int(&[0x01]).unwrap(), 1);
@@ -1391,7 +1392,8 @@ mod tests {
 
     #[test]
     fn test_is_true() {
-        let executor = ScriptExecutor::new(&mut vec![], None);
+        let mut stack = vec![];
+        let executor = ScriptExecutor::new(&mut stack, None);
         
         // Test true values
         assert!(executor.is_true(&[0x01]));

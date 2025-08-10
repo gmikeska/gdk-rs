@@ -21,7 +21,7 @@ async fn get_connected_session() -> (Session, std::net::SocketAddr) {
         tor_enabled: false,
     };
     let url = format!("ws://{}/v2/ws", server_addr);
-    session.connect(&connect_params, &url).await.unwrap();
+    session.connect(&connect_params, &[url]).await.unwrap();
     (session, server_addr)
 }
 

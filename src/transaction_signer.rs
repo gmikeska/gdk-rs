@@ -735,19 +735,31 @@ impl TransactionSigner {
 mod tests {
     use super::*;
     use crate::primitives::address::Network;
-    use secp256k1::rand::thread_rng;
+    use rand::thread_rng;
 
     fn create_test_transaction() -> Transaction {
         let mut tx = Transaction::new();
         tx.version = 2;
         
         // Add a test input
-        let outpoint = OutPoint::new([1u8; 32], 0);
-        let input = TxIn::new(outpoint, Script::new(), 0xffffffff);
-        tx.input.push(input);
+        let outpoint = crate::primitives::transaction::OutPoint::new([1u8; 32], 0);
+        let input = crate::primitives::transaction::TxIn {
+            previous_output: outpoint,
+            script_sig: Script::new(),
+            sequence: 0xffffffff,
+            witness: Vec::new(),
+        };
         
-        // Add a test output
-        let output = TxOut::new(50000, Script::new());
+        let mut tx = Transaction {
+            version: 1,
+            lock_time: 0,
+            input: vec![input],
+            output: vec![],
+        };
+        let output = crate::primitives::transaction::TxOut {
+            value: 50000,
+            script_pubkey: Script::new(),
+        };
         tx.output.push(output);
         
         tx
@@ -778,7 +790,8 @@ mod tests {
     #[test]
     fn test_signing_key_creation() {
         let secp = Secp256k1::new();
-        let private_key = SecretKey::new(&mut thread_rng());
+        let mut rng = thread_rng();
+        let private_key = SecretKey::from_slice(&[1u8; 32]).unwrap();
         let signing_key = SigningKey::new(private_key);
         
         assert_eq!(signing_key.private_key, private_key);

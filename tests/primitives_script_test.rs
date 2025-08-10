@@ -1,8 +1,6 @@
 //! Simple tests for script functionality
 
-#[cfg(test)]
-mod tests {
-    use super::super::script::*;
+use gdk_rs::primitives::script::*;
 
     #[test]
     fn test_basic_script_execution() {
@@ -64,4 +62,3 @@ mod tests {
         assert!(result.is_ok());
         assert!(!result.unwrap());
     }
-}

@@ -75,7 +75,8 @@ async fn handle_socket(mut socket: WebSocket) {
                     serde_json::to_value(res).unwrap()
                 }
                 "create_transaction" => {
-                    let pset = PartiallySignedTransaction::default();
+                    let empty_tx = gdk_rs::primitives::transaction::Transaction::new();
+                    let pset = PartiallySignedTransaction::new(empty_tx).unwrap();
                     serde_json::to_value(pset).unwrap()
                 }
                 _ => {

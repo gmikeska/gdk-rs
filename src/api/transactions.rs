@@ -686,15 +686,16 @@ mod tests {
     }
 
     #[test]
+    #[ignore] // Incomplete test - needs mock connection implementation
     fn test_rbf_detection() {
         let tx = create_test_transaction();
         
         // Mock broadcaster for testing
-        let (notification_tx, _) = broadcast::channel(10);
-        let connection = Arc::new(
-            // This would need a mock connection in a real test
-            // For now, we'll skip this test
-        );
+        // let (notification_tx, _) = broadcast::channel(10);
+        // let connection = Arc::new(
+        //     // This would need a mock connection in a real test
+        //     // For now, we'll skip this test
+        // );
         
         // Test would verify RBF detection logic
         // assert!(broadcaster.is_rbf_enabled(&tx));

@@ -1,4 +1,117 @@
-//! Session management.
+//! Session management and network connections.
+//!
+//! This module provides the core [`Session`] type that manages connections to Bitcoin and Liquid
+//! networks, handles authentication, and coordinates wallet operations. Sessions are the primary
+//! interface for interacting with the GDK.
+//!
+//! # Overview
+//!
+//! A session represents a connection to a Green backend server and manages:
+//! - Network connections with automatic reconnection
+//! - User authentication and wallet access
+//! - Real-time notifications from the blockchain
+//! - Transaction creation, signing, and broadcasting
+//! - Subaccount and address management
+//!
+//! # Examples
+//!
+//! ## Basic Session Usage
+//!
+//! ```rust
+//! use gdk_rs::{Session, GdkConfig};
+//! use gdk_rs::types::{ConnectParams, LoginCredentials};
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let config = GdkConfig::default();
+//!     let mut session = Session::new(config);
+//!
+//!     // Connect to the network
+//!     let params = ConnectParams {
+//!         chain_id: "mainnet".to_string(),
+//!         user_agent: Some("MyWallet/1.0".to_string()),
+//!         use_proxy: false,
+//!         proxy: None,
+//!         tor_enabled: false,
+//!     };
+//!     session.connect_single(&params, "wss://green-backend.blockstream.com/ws").await?;
+//!
+//!     // Subscribe to notifications
+//!     let mut notifications = session.subscribe();
+//!     
+//!     // Login with credentials
+//!     let credentials = LoginCredentials {
+//!         mnemonic: Some("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string()),
+//!         ..Default::default()
+//!     };
+//!     session.login(&credentials).await?;
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ## Multi-Endpoint Connection with Failover
+//!
+//! ```rust
+//! use gdk_rs::{Session, GdkConfig};
+//! use gdk_rs::types::ConnectParams;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let config = GdkConfig::default();
+//!     let mut session = Session::new(config);
+//!
+//!     let params = ConnectParams {
+//!         chain_id: "mainnet".to_string(),
+//!         ..Default::default()
+//!     };
+//!
+//!     // Connect with multiple endpoints for failover
+//!     let endpoints = vec![
+//!         "wss://green-backend.blockstream.com/ws".to_string(),
+//!         "wss://green-backend-tor.blockstream.com/ws".to_string(),
+//!     ];
+//!     session.connect(&params, &endpoints).await?;
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ## Notification Handling
+//!
+//! ```rust
+//! use gdk_rs::{Session, GdkConfig};
+//! use gdk_rs::protocol::{Notification, NotificationFilter};
+//! use tokio::time::{timeout, Duration};
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let session = Session::new(GdkConfig::default());
+//!     
+//!     // Subscribe to filtered notifications
+//!     let filter = NotificationFilter::new()
+//!         .with_blocks(true)
+//!         .with_transactions(true);
+//!     let (subscription_id, mut notifications) = session.subscribe_filtered(filter).await?;
+//!
+//!     // Handle notifications with timeout
+//!     while let Ok(Ok(notification)) = timeout(Duration::from_secs(30), notifications.recv()).await {
+//!         match notification {
+//!             Notification::Block { height, .. } => {
+//!                 println!("New block at height: {}", height);
+//!             }
+//!             Notification::Transaction { txid, .. } => {
+//!                 println!("New transaction: {}", txid);
+//!             }
+//!             _ => {}
+//!         }
+//!     }
+//!
+//!     // Clean up subscription
+//!     session.unsubscribe(subscription_id).await?;
+//!     Ok(())
+//! }
+//! ```
 
 use crate::api::transactions::{TransactionBroadcaster, TransactionStatus, RbfParams};
 use crate::error::GdkError;
@@ -101,6 +214,32 @@ impl Default for SessionPersistence {
 }
 
 /// Represents a GDK session with robust connection management.
+///
+/// A `Session` is the primary interface for interacting with Bitcoin and Liquid networks
+/// through the Green backend infrastructure. It manages network connections, user authentication,
+/// wallet operations, and real-time blockchain notifications.
+///
+/// # Features
+///
+/// - **Connection Management**: Automatic reconnection with exponential backoff
+/// - **Multi-Endpoint Support**: Failover between multiple backend servers
+/// - **Notification System**: Real-time blockchain events with filtering
+/// - **Transaction Broadcasting**: Send transactions with confirmation tracking
+/// - **Wallet Operations**: Subaccount management and address generation
+/// - **Hardware Wallet Support**: Integration with external signing devices
+///
+/// # Thread Safety
+///
+/// `Session` is designed to be thread-safe and can be shared across threads using `Arc<Session>`.
+/// All operations are protected by appropriate synchronization primitives.
+///
+/// # Lifecycle
+///
+/// 1. Create a session with [`Session::new`]
+/// 2. Connect to the network with [`Session::connect`] or [`Session::connect_single`]
+/// 3. Authenticate with [`Session::login`]
+/// 4. Perform wallet operations
+/// 5. Clean up with [`Session::disconnect`]
 pub struct Session {
     config: Arc<GdkConfig>,
     connection_pool: Option<ConnectionPool>,
@@ -114,7 +253,27 @@ pub struct Session {
 }
 
 impl Session {
-    /// Create a new session.
+    /// Create a new session with default configuration.
+    ///
+    /// # Arguments
+    ///
+    /// * `config` - Configuration parameters for the session
+    ///
+    /// # Returns
+    ///
+    /// Returns a new `Session` instance ready for connection.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use gdk_rs::{Session, GdkConfig};
+    /// use std::path::PathBuf;
+    ///
+    /// let config = GdkConfig {
+    ///     data_dir: Some(PathBuf::from("/tmp/wallet-data")),
+    /// };
+    /// let session = Session::new(config);
+    /// ```
     pub fn new(config: GdkConfig) -> Self {
         let (tx, _) = broadcast::channel(256); // Increased buffer for notifications
         let notification_manager = Arc::new(NotificationManager::new(NotificationConfig::default()));
@@ -166,6 +325,40 @@ impl Session {
     }
 
     /// Subscribe to notifications from the session.
+    ///
+    /// Returns a receiver that will receive all notifications from the session,
+    /// including block updates, transaction confirmations, and network status changes.
+    ///
+    /// # Returns
+    ///
+    /// A `broadcast::Receiver<Notification>` that can be used to receive notifications.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use gdk_rs::{Session, GdkConfig};
+    /// use gdk_rs::protocol::Notification;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let session = Session::new(GdkConfig::default());
+    ///     let mut notifications = session.subscribe();
+    ///
+    ///     // Handle notifications in a loop
+    ///     while let Ok(notification) = notifications.recv().await {
+    ///         match notification {
+    ///             Notification::Block { height, .. } => {
+    ///                 println!("New block: {}", height);
+    ///             }
+    ///             Notification::Transaction { txid, .. } => {
+    ///                 println!("Transaction update: {}", txid);
+    ///             }
+    ///             _ => {}
+    ///         }
+    ///     }
+    ///     Ok(())
+    /// }
+    /// ```
     pub fn subscribe(&self) -> broadcast::Receiver<Notification> {
         self.notification_sender.subscribe()
     }
@@ -201,6 +394,55 @@ impl Session {
     }
 
     /// Connect to the Green server with multiple endpoints for failover.
+    ///
+    /// This method establishes connections to one or more Green backend servers,
+    /// providing automatic failover and load balancing capabilities.
+    ///
+    /// # Arguments
+    ///
+    /// * `params` - Connection parameters including network settings and proxy configuration
+    /// * `urls` - Array of WebSocket URLs to connect to, in order of preference
+    ///
+    /// # Returns
+    ///
+    /// Returns `Ok(())` on successful connection, or a [`GdkError`] if all connection attempts fail.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use gdk_rs::{Session, GdkConfig};
+    /// use gdk_rs::types::ConnectParams;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let mut session = Session::new(GdkConfig::default());
+    ///     
+    ///     let params = ConnectParams {
+    ///         chain_id: "mainnet".to_string(),
+    ///         user_agent: Some("MyWallet/1.0".to_string()),
+    ///         use_proxy: false,
+    ///         proxy: None,
+    ///         tor_enabled: false,
+    ///     };
+    ///     
+    ///     let endpoints = vec![
+    ///         "wss://green-backend.blockstream.com/ws".to_string(),
+    ///         "wss://green-backend-tor.blockstream.com/ws".to_string(),
+    ///     ];
+    ///     
+    ///     session.connect(&params, &endpoints).await?;
+    ///     println!("Connected successfully with failover support");
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// # Connection Management
+    ///
+    /// The connection pool will:
+    /// - Attempt to connect to endpoints in order of preference
+    /// - Automatically reconnect if connections are lost
+    /// - Load balance requests across available connections
+    /// - Handle network errors gracefully with exponential backoff
     pub async fn connect(&mut self, params: &ConnectParams, urls: &[String]) -> Result<()> {
         *self.state.write().await = SessionState::Connecting;
         
@@ -375,9 +617,88 @@ impl Session {
             .ok_or_else(|| GdkError::Network("Not connected".to_string()))?;
         let params_val = serde_json::to_value(params)?;
         let result_val = connection_pool.call(method, params_val).await?;
-        serde_json::from_value(result_val).map_err(GdkError::Json)
+        serde_json::from_value(result_val).map_err(|e| GdkError::Json(e.to_string()))
     }
 
+    /// Authenticate with the session using provided credentials.
+    ///
+    /// This method authenticates the user with the Green backend and initializes
+    /// the wallet state for subsequent operations.
+    ///
+    /// # Arguments
+    ///
+    /// * `creds` - Login credentials containing authentication information
+    ///
+    /// # Returns
+    ///
+    /// Returns a [`RegisterLoginResult`] containing wallet information on success,
+    /// or a [`GdkError`] if authentication fails.
+    ///
+    /// # Examples
+    ///
+    /// ## Login with Mnemonic
+    ///
+    /// ```rust
+    /// use gdk_rs::{Session, GdkConfig};
+    /// use gdk_rs::types::LoginCredentials;
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let session = Session::new(GdkConfig::default());
+    ///     // ... connect to network first ...
+    ///     
+    ///     let credentials = LoginCredentials {
+    ///         mnemonic: Some("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about".to_string()),
+    ///         password: None,
+    ///         bip39_passphrase: None,
+    ///         pin: None,
+    ///         pin_data: None,
+    ///         username: None,
+    ///         core_descriptors: None,
+    ///     };
+    ///     
+    ///     let result = session.login(&credentials).await?;
+    ///     println!("Wallet ID: {}", result.wallet_hash_id);
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// ## Login with PIN
+    ///
+    /// ```rust
+    /// use gdk_rs::{Session, GdkConfig};
+    /// use gdk_rs::types::{LoginCredentials, PinData};
+    ///
+    /// #[tokio::main]
+    /// async fn main() -> Result<(), Box<dyn std::error::Error>> {
+    ///     let session = Session::new(GdkConfig::default());
+    ///     // ... connect to network first ...
+    ///     
+    ///     let pin_data = PinData {
+    ///         encrypted_data: "encrypted_wallet_data".to_string(),
+    ///         pin_identifier: "pin_id_123".to_string(),
+    ///         salt: "random_salt".to_string(),
+    ///     };
+    ///     
+    ///     let credentials = LoginCredentials {
+    ///         pin: Some("1234".to_string()),
+    ///         pin_data: Some(pin_data),
+    ///         ..Default::default()
+    ///     };
+    ///     
+    ///     let result = session.login(&credentials).await?;
+    ///     println!("Authenticated with PIN");
+    ///     Ok(())
+    /// }
+    /// ```
+    ///
+    /// # Authentication Methods
+    ///
+    /// The following authentication methods are supported:
+    /// - **Mnemonic**: 12 or 24 word BIP39 seed phrase
+    /// - **PIN**: Encrypted wallet data with PIN protection
+    /// - **Hardware Wallet**: External signing device authentication
+    /// - **Watch-Only**: Username/password or descriptor-based read-only access
     pub async fn login(&self, creds: &LoginCredentials) -> Result<RegisterLoginResult> {
         let login_result: RegisterLoginResult = self.call("login_user", creds).await?;
         // TODO: Create wallet from credentials when wallet_simple is implemented

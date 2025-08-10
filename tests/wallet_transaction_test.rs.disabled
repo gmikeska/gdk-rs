@@ -1,12 +1,10 @@
 //! Tests for transaction history and UTXO management functionality
 
-#[cfg(test)]
-mod tests {
-    use crate::wallet_simple::{
-        Wallet, SubaccountType, TransactionInfo, UtxoInfo, PaginationParams, 
-        CoinSelectionStrategy, TransactionType, TransactionInput, TransactionOutput
-    };
-    use crate::primitives::address::Network;
+use gdk_rs::wallet_simple::{
+    Wallet, SubaccountType, TransactionInfo, UtxoInfo, PaginationParams, 
+    CoinSelectionStrategy, TransactionType, TransactionInput, TransactionOutput
+};
+use gdk_rs::primitives::address::Network;
 
     #[test]
     fn test_transaction_history_retrieval() {
@@ -433,4 +431,3 @@ mod tests {
         let total_balance = wallet.calculate_total_balance().unwrap();
         assert_eq!(total_balance, 0);
     }
-}

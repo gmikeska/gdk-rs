@@ -1,4 +1,118 @@
-//! Wallet logic, including key management and signing.
+//! Wallet operations, subaccount management, and address generation.
+//!
+//! This module provides comprehensive wallet functionality including hierarchical deterministic
+//! key management, subaccount organization, address generation, and balance tracking. It implements
+//! BIP32/BIP44/BIP49/BIP84 standards for deterministic wallet operations.
+//!
+//! # Overview
+//!
+//! The wallet system is organized around the concept of subaccounts, where each subaccount
+//! represents a different address type or purpose:
+//!
+//! - **Legacy (P2PKH)**: Traditional Bitcoin addresses starting with '1'
+//! - **SegWit Wrapped (P2SH-P2WPKH)**: SegWit addresses wrapped in P2SH, starting with '3'
+//! - **Native SegWit (P2WPKH)**: Native SegWit addresses starting with 'bc1'
+//! - **Native SegWit Multisig (P2WSH)**: Native SegWit multisig addresses
+//!
+//! # Examples
+//!
+//! ## Creating a Wallet from Mnemonic
+//!
+//! ```rust
+//! use gdk_rs::wallet::{Wallet, SubaccountType};
+//! use gdk_rs::primitives::address::Network;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+//!     let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet)?;
+//!
+//!     // Create a native SegWit subaccount
+//!     let subaccount_id = wallet.create_subaccount(
+//!         "Main Account".to_string(),
+//!         SubaccountType::NativeSegwit,
+//!     )?;
+//!
+//!     // Get a receiving address
+//!     let address = wallet.get_receive_address(subaccount_id)?;
+//!     println!("Receiving address: {}", address);
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ## Managing Multiple Subaccounts
+//!
+//! ```rust
+//! use gdk_rs::wallet::{Wallet, SubaccountType};
+//! use gdk_rs::primitives::address::Network;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let wallet = Wallet::from_mnemonic("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about", Network::Mainnet)?;
+//!
+//!     // Create different types of subaccounts
+//!     let legacy_id = wallet.create_subaccount("Legacy".to_string(), SubaccountType::Legacy)?;
+//!     let segwit_id = wallet.create_subaccount("SegWit".to_string(), SubaccountType::NativeSegwit)?;
+//!     let wrapped_id = wallet.create_subaccount("Wrapped SegWit".to_string(), SubaccountType::SegwitWrapped)?;
+//!
+//!     // List all subaccounts
+//!     let subaccounts = wallet.get_subaccounts();
+//!     for subaccount in subaccounts {
+//!         println!("Subaccount {}: {} ({})", subaccount.id, subaccount.name, subaccount.subaccount_type.name());
+//!     }
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! ## Address Generation and Tracking
+//!
+//! ```rust
+//! use gdk_rs::wallet::{Wallet, SubaccountType};
+//! use gdk_rs::primitives::address::Network;
+//!
+//! #[tokio::main]
+//! async fn main() -> Result<(), Box<dyn std::error::Error>> {
+//!     let wallet = Wallet::from_mnemonic("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about", Network::Testnet)?;
+//!     let subaccount_id = wallet.create_subaccount("Test".to_string(), SubaccountType::NativeSegwit)?;
+//!
+//!     // Generate multiple receiving addresses
+//!     for i in 0..5 {
+//!         let address = wallet.get_receive_address(subaccount_id)?;
+//!         println!("Address {}: {}", i + 1, address);
+//!     }
+//!
+//!     // Get all previous addresses with usage information
+//!     let addresses = wallet.get_previous_addresses(subaccount_id)?;
+//!     for addr_info in addresses {
+//!         println!("Address: {}, Used: {}, Balance: {} sats", 
+//!                  addr_info.address, addr_info.used, addr_info.balance);
+//!     }
+//!
+//!     Ok(())
+//! }
+//! ```
+//!
+//! # Key Management
+//!
+//! The wallet uses BIP32 hierarchical deterministic key derivation with the following structure:
+//!
+//! ```text
+//! m / purpose' / coin_type' / account' / change / address_index
+//! ```
+//!
+//! Where:
+//! - `purpose`: 44 (Legacy), 49 (SegWit Wrapped), 84 (Native SegWit)
+//! - `coin_type`: 0 (Bitcoin Mainnet), 1 (Bitcoin Testnet)
+//! - `account`: Subaccount index (0, 1, 2, ...)
+//! - `change`: 0 (receiving), 1 (change addresses)
+//! - `address_index`: Sequential address index within the chain
+//!
+//! # Thread Safety
+//!
+//! All wallet operations are thread-safe and can be called concurrently from multiple threads.
+//! Internal state is protected by appropriate synchronization primitives.
 
 use crate::primitives::bip32::{ExtendedPrivateKey, ExtendedPublicKey, DerivationPath, Network as BipNetwork};
 use crate::primitives::address::{Address, Network};
@@ -329,7 +443,31 @@ impl AddressManager {
     }
 }
 
-/// Main wallet structure with subaccount management
+/// Main wallet structure with subaccount management.
+///
+/// The `Wallet` struct represents a hierarchical deterministic (HD) wallet that manages
+/// multiple subaccounts, each with their own address generation and balance tracking.
+/// It implements BIP32/BIP44/BIP49/BIP84 standards for deterministic key derivation.
+///
+/// # Features
+///
+/// - **HD Key Management**: BIP32 hierarchical deterministic key derivation
+/// - **Multiple Address Types**: Support for Legacy, SegWit, and Native SegWit addresses
+/// - **Subaccount Organization**: Separate subaccounts for different purposes
+/// - **Address Generation**: Automatic address generation with gap limit management
+/// - **Balance Tracking**: Real-time balance updates and UTXO management
+/// - **Thread Safety**: All operations are thread-safe and can be called concurrently
+///
+/// # Key Derivation Structure
+///
+/// The wallet follows the BIP44 derivation structure:
+/// ```text
+/// m / purpose' / coin_type' / account' / change / address_index
+/// ```
+///
+/// # Examples
+///
+/// See the module-level documentation for comprehensive examples.
 pub struct Wallet {
     /// Master extended private key
     master_key: ExtendedPrivateKey,
@@ -344,7 +482,41 @@ pub struct Wallet {
 }
 
 impl Wallet {
-    /// Create a new wallet from a mnemonic
+    /// Create a new wallet from a BIP39 mnemonic seed phrase.
+    ///
+    /// This method creates a hierarchical deterministic (HD) wallet from a BIP39 mnemonic
+    /// seed phrase. The wallet will derive all keys using BIP32 key derivation.
+    ///
+    /// # Arguments
+    ///
+    /// * `mnemonic_str` - A valid BIP39 mnemonic seed phrase (12 or 24 words)
+    /// * `network` - The Bitcoin network this wallet will operate on
+    ///
+    /// # Returns
+    ///
+    /// Returns a new `Wallet` instance on success, or a [`GdkError`] if the mnemonic
+    /// is invalid or key derivation fails.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use gdk_rs::wallet::Wallet;
+    /// use gdk_rs::primitives::address::Network;
+    ///
+    /// // Create a wallet from a 12-word mnemonic
+    /// let mnemonic = "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+    /// let wallet = Wallet::from_mnemonic(mnemonic, Network::Testnet)?;
+    ///
+    /// println!("Wallet ID: {}", wallet.get_wallet_identifier());
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    ///
+    /// # Security Considerations
+    ///
+    /// - The mnemonic should be generated using cryptographically secure randomness
+    /// - Store the mnemonic securely and never transmit it over insecure channels
+    /// - Consider using a BIP39 passphrase for additional security
+    /// - The master private key is kept in memory and should be protected
     pub fn from_mnemonic(mnemonic_str: &str, network: Network) -> Result<Self> {
         let mnemonic = Mnemonic::from_str(mnemonic_str)?;
         let seed = mnemonic.to_seed(Some(""))?;
@@ -365,7 +537,44 @@ impl Wallet {
         })
     }
 
-    /// Create a new subaccount
+    /// Create a new subaccount with the specified address type.
+    ///
+    /// This method creates a new subaccount within the wallet, each with its own
+    /// address generation and balance tracking. Subaccounts allow organizing funds
+    /// by purpose or address type.
+    ///
+    /// # Arguments
+    ///
+    /// * `name` - Human-readable name for the subaccount
+    /// * `subaccount_type` - Type of addresses this subaccount will generate
+    ///
+    /// # Returns
+    ///
+    /// Returns the unique subaccount ID on success, or a [`GdkError`] if creation fails.
+    ///
+    /// # Examples
+    ///
+    /// ```rust
+    /// use gdk_rs::wallet::{Wallet, SubaccountType};
+    /// use gdk_rs::primitives::address::Network;
+    ///
+    /// let wallet = Wallet::from_mnemonic("abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about", Network::Testnet)?;
+    ///
+    /// // Create different types of subaccounts
+    /// let legacy_id = wallet.create_subaccount("Legacy Account".to_string(), SubaccountType::Legacy)?;
+    /// let segwit_id = wallet.create_subaccount("SegWit Account".to_string(), SubaccountType::NativeSegwit)?;
+    /// let wrapped_id = wallet.create_subaccount("Wrapped SegWit".to_string(), SubaccountType::SegwitWrapped)?;
+    ///
+    /// println!("Created subaccounts: {}, {}, {}", legacy_id, segwit_id, wrapped_id);
+    /// # Ok::<(), Box<dyn std::error::Error>>(())
+    /// ```
+    ///
+    /// # Address Types
+    ///
+    /// - [`SubaccountType::Legacy`]: P2PKH addresses (1...)
+    /// - [`SubaccountType::SegwitWrapped`]: P2SH-wrapped SegWit addresses (3...)
+    /// - [`SubaccountType::NativeSegwit`]: Native SegWit addresses (bc1...)
+    /// - [`SubaccountType::NativeSegwitMultisig`]: Native SegWit multisig addresses
     pub fn create_subaccount(
         &self,
         name: String,

@@ -1,9 +1,7 @@
 //! Tests for comprehensive address management functionality
 
-#[cfg(test)]
-mod tests {
-    use crate::wallet_simple::{Wallet, SubaccountType, AddressInfo};
-    use crate::primitives::address::Network;
+use gdk_rs::wallet_simple::{Wallet, SubaccountType, AddressInfo};
+use gdk_rs::primitives::address::Network;
 
     #[test]
     fn test_receive_address_generation() {
@@ -333,4 +331,3 @@ mod tests {
         let change_addr1 = wallet1.get_address_at_path(id1, true, 0).unwrap();
         assert_ne!(addr1, change_addr1);
     }
-}
