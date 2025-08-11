@@ -10,16 +10,20 @@ use gdk_rs::primitives::script::Script;
 use gdk_rs::session::Session;
 use gdk_rs::bip39::*;
 use gdk_rs::protocol::{
-    LoginCredentials as ProtocolLoginCredentials, 
+    LoginCredentials, 
     Addressee, 
     GetTransactionsParams, 
     GetUnspentOutputsParams,
 };
+use gdk_rs::utils::logging::LogLevel;
 use secp256k1::{Secp256k1, SecretKey};
 use tempfile::TempDir;
 
+mod common;
+
 /// Helper to create test session with wallet
-async fn create_test_session_with_wallet() -> (Session, ProtocolLoginCredentials) {
+async fn create_test_session_with_wallet() -> (Session, LoginCredentials) {
+    println!("Creating test session with wallet");
     let temp_dir = TempDir::new().unwrap();
     let config = GdkConfig {
         data_dir: Some(temp_dir.path().to_path_buf()),
@@ -29,8 +33,10 @@ async fn create_test_session_with_wallet() -> (Session, ProtocolLoginCredentials
         with_shutdown: false,
     };
     
+    println!("Initializing GDK");
     init(&config).unwrap();
     
+    println!("Creating session");
     let mut session = Session::new(config);
     let network_params = ConnectParams {
         name: Some("testnet".to_string()),
@@ -46,18 +52,41 @@ async fn create_test_session_with_wallet() -> (Session, ProtocolLoginCredentials
         chain_id: "bitcoin".to_string(),
     };
     
-    // For test environment, use empty URLs
-    let urls: Vec<String> = vec![];
-    session.connect(&network_params, &urls).await.unwrap();
+    // Start mock server for testing
+    println!("Starting mock server");
+    let mock_addr = common::start_mock_server().await;
+    let mock_url = format!("ws://{}/v2/ws", mock_addr);
+    println!("Mock server URL: {}", mock_url);
+    let urls: Vec<String> = vec![mock_url];
+    println!("Connecting to server");
+    // Add timeout to connection attempt
+    match tokio::time::timeout(
+        tokio::time::Duration::from_secs(10),
+        session.connect(&network_params, &urls)
+    ).await {
+        Ok(Ok(_)) => println!("Connected successfully"),
+        Ok(Err(e)) => {
+            println!("Connection failed: {}", e);
+            panic!("Failed to connect: {}", e);
+        },
+        Err(_) => {
+            println!("Connection timed out after 10 seconds");
+            panic!("Connection timeout");
+        }
+    }
     
     let mnemonic = Mnemonic::generate(128).unwrap();
-    let credentials = ProtocolLoginCredentials::from_mnemonic(
+    let credentials = LoginCredentials::from_mnemonic(
         mnemonic.to_string(),
         None
     );
     
+    println!("Registering user");
     session.register_user(&credentials).await.unwrap();
+    println!("User registered");
+    println!("Logging in");
     session.login(&credentials).await.unwrap();
+    println!("Login successful");
     
     (session, credentials)
 }
@@ -100,7 +129,9 @@ fn create_test_utxo(value: u64, script_type: &str) -> (OutPoint, TxOut, UtxoInfo
 
 #[tokio::test]
 async fn test_simple_p2pkh_transaction_flow() {
+    println!("Starting test_simple_p2pkh_transaction_flow");
     let (mut session, _credentials) = create_test_session_with_wallet().await;
+    println!("Session created successfully");
     
     // Create transaction builder
     let builder = TransactionBuilder::new(AddressNetwork::Testnet);

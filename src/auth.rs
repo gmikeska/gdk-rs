@@ -1,7 +1,7 @@
 use crate::error::GdkError;
 use crate::protocol::LoginCredentials;
 #[cfg(feature = "hardware-wallets")]
-use crate::hw::{HardwareWalletManager, HardwareWalletInfo, HardwareWalletCredentials};
+use crate::hw::{HardwareWalletManager, HardwareWalletInfo};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};

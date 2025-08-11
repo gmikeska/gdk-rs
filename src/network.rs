@@ -449,12 +449,37 @@ impl Connection {
             request_rx,
             control_rx,
             notification_tx,
-            state,
+            state.clone(),
             health,
             config,
             message_queue,
             stats,
         );
+
+        // Wait for connection to be established
+        let mut attempts = 0;
+        let max_attempts = 100; // 10 seconds with 100ms intervals
+        loop {
+            let current_state = state.read().await.clone();
+            log::trace!("Connection state check #{}: {:?}", attempts, current_state);
+            match current_state {
+                ConnectionState::Connected => {
+                    log::debug!("Connection established successfully");
+                    break;
+                }
+                ConnectionState::Failed => {
+                    return Err(GdkError::network_simple("Connection failed".to_string()));
+                }
+                _ => {
+                    if attempts >= max_attempts {
+                        log::error!("Connection timeout after {} attempts, final state: {:?}", attempts, current_state);
+                        return Err(GdkError::network_simple("Connection timeout".to_string()));
+                    }
+                    attempts += 1;
+                    tokio::time::sleep(Duration::from_millis(100)).await;
+                }
+            }
+        }
 
         Ok(connection)
     }
@@ -721,6 +746,8 @@ async fn run_connection(
                 match control {
                     ConnectionControl::Disconnect => {
                         log::info!("Disconnect requested");
+                        // Send a proper close frame before closing
+                        let _ = ws_tx.send(Message::Close(None)).await;
                         let _ = ws_tx.close().await;
                         return true; // Disconnect requested
                     }
