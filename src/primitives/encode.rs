@@ -1,6 +1,6 @@
 //! Consensus-critical serialization and deserialization.
 
-use crate::{Result, GdkError};
+use crate::Result;
 use std::io::{Read, Write};
 
 pub trait Encodable {

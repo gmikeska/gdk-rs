@@ -1,0 +1,20 @@
+### Error Inventory
+
+#### Feature-gating / Missing Modules
+- No specific errors related to feature-gating or missing modules were found.
+
+#### Unused Imports / Variables
+- Numerous warnings for unused imports.
+- Warnings for mutable variables that don't need to be mutable.
+- Warnings for unused variables.
+
+#### Missing APIs (Methods / Types / Trait Impls)
+- Errors indicating missing functions or associated items, such as:
+  - `no function or associated item named 'from_mnemonic' found for struct 'gdk_rs::protocol::LoginCredentials'`
+  - Missing methods in `TransactionBuilder` like `add_input`, `add_output`, etc.
+
+#### Logic or Pattern-Matching Errors
+- Errors related to private fields being used as methods.
+- Incorrect pattern matching in:
+  - `expected tuple struct or tuple variant, found associated function 'GdkError::network_simple'`
+

@@ -4,7 +4,7 @@ use gdk_rs::utils::crypto::*;
 use gdk_rs::bip39::*;
 use gdk_rs::auth::*;
 use gdk_rs::types::LoginCredentials;
-use secp256k1::{Secp256k1, SecretKey, PublicKey};
+use secp256k1::Secp256k1;
 use std::collections::HashSet;
 
 #[test]
@@ -216,7 +216,7 @@ fn test_pin_data_security() {
 
 #[test]
 fn test_signature_security() {
-    let secp = Secp256k1::new();
+    let _secp = Secp256k1::new();
     let signer = MessageSigning::new();
     
     // Generate test key and message
@@ -431,7 +431,7 @@ fn test_input_validation_security() {
     // Test mnemonic validation with malicious inputs
     let malicious_inputs = [
         "", // Empty string
-        "a".repeat(10000), // Very long string
+        &"a".repeat(10000), // Very long string
         "abandon\0abandon\0abandon", // Null bytes
         "abandon\x01abandon\x02abandon", // Control characters
         "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon invalid", // Invalid word
@@ -445,7 +445,7 @@ fn test_input_validation_security() {
     // Test PIN validation with malicious inputs
     let malicious_pins = [
         "", // Empty PIN
-        "1".repeat(10000), // Very long PIN
+        &"1".repeat(10000), // Very long PIN
         "123\0456", // Null bytes
         "123\x01456", // Control characters
     ];

@@ -115,7 +115,7 @@
 
 use crate::api::transactions::{TransactionBroadcaster, TransactionStatus, RbfParams};
 use crate::error::GdkError;
-use crate::network::{Connection, ConnectionConfig, ConnectionPool, ConnectionEndpoint, ConnectionState};
+use crate::network::{ConnectionConfig, ConnectionPool, ConnectionEndpoint, ConnectionState};
 use crate::notifications::{NotificationManager, NotificationConfig, NotificationBatch};
 use crate::primitives::transaction::Transaction;
 use crate::protocol::NotificationFilter;
@@ -171,7 +171,7 @@ impl crate::api::transactions::NetworkConnection for MockConnection {
                         "confirmations": 0
                     }))
                 } else {
-                    Err(GdkError::Network("Transaction not found".to_string()))
+                    Err(GdkError::network_simple("Transaction not found".to_string()))
                 }
             }
             _ => {
@@ -455,7 +455,7 @@ impl Session {
             .collect();
 
         if endpoints.is_empty() {
-            return Err(GdkError::Network("No connection endpoints provided".to_string()));
+            return Err(GdkError::network_simple("No connection endpoints provided".to_string()));
         }
 
         let connection_pool = ConnectionPool::new(
@@ -487,6 +487,13 @@ impl Session {
     /// Connect to a single Green server (convenience method).
     pub async fn connect_single(&mut self, params: &ConnectParams, url: &str) -> Result<()> {
         self.connect(params, &[url.to_string()]).await
+    }
+    
+    /// Register a new user (creates a new wallet)
+    pub async fn register_user(&mut self, credentials: &LoginCredentials) -> Result<RegisterLoginResult> {
+        // In a real implementation, this would create a new wallet
+        // For now, we'll just treat it as a login
+        self.login(credentials).await
     }
 
     /// Get the current session state.
@@ -526,7 +533,7 @@ impl Session {
             *self.state.write().await = SessionState::Connected;
             Ok(())
         } else {
-            Err(GdkError::Network("No connection pool available".to_string()))
+            Err(GdkError::network_simple("No connection pool available".to_string()))
         }
     }
 
@@ -614,10 +621,10 @@ impl Session {
         params: &impl serde::Serialize,
     ) -> Result<T> {
         let connection_pool = self.connection_pool.as_ref()
-            .ok_or_else(|| GdkError::Network("Not connected".to_string()))?;
+            .ok_or_else(|| GdkError::network_simple("Not connected".to_string()))?;
         let params_val = serde_json::to_value(params)?;
         let result_val = connection_pool.call(method, params_val).await?;
-        serde_json::from_value(result_val).map_err(|e| GdkError::Json(e.to_string()))
+        serde_json::from_value(result_val).map_err(|e| GdkError::json_simple(e.to_string()))
     }
 
     /// Authenticate with the session using provided credentials.
@@ -744,7 +751,7 @@ impl Session {
     /// Sign a transaction PSBT.
     pub async fn sign_transaction(&self, pset: &PartiallySignedTransaction) -> Result<PartiallySignedTransaction> {
         let wallet_lock = self.wallet.lock().await;
-        let _wallet = wallet_lock.as_ref().ok_or_else(|| GdkError::Auth("Not logged in".to_string()))?;
+        let _wallet = wallet_lock.as_ref().ok_or_else(|| GdkError::auth_simple("Not logged in".to_string()))?;
 
         log::info!("PSBT signing logic would go here, using the wallet's keys.");
 
@@ -780,7 +787,7 @@ impl Session {
     pub async fn broadcast_transaction(&self, transaction: &Transaction) -> Result<String> {
         let broadcaster = self.transaction_broadcaster.lock().await;
         let broadcaster = broadcaster.as_ref()
-            .ok_or_else(|| GdkError::Network("Transaction broadcaster not initialized".to_string()))?;
+            .ok_or_else(|| GdkError::network_simple("Transaction broadcaster not initialized".to_string()))?;
 
         broadcaster.broadcast_transaction(transaction).await
     }
@@ -793,7 +800,7 @@ impl Session {
     ) -> Result<String> {
         let broadcaster = self.transaction_broadcaster.lock().await;
         let broadcaster = broadcaster.as_ref()
-            .ok_or_else(|| GdkError::Network("Transaction broadcaster not initialized".to_string()))?;
+            .ok_or_else(|| GdkError::network_simple("Transaction broadcaster not initialized".to_string()))?;
 
         broadcaster.replace_transaction(rbf_params, new_transaction).await
     }
@@ -802,7 +809,7 @@ impl Session {
     pub async fn get_transaction_status(&self, txid: &str) -> Result<Option<TransactionStatus>> {
         let broadcaster = self.transaction_broadcaster.lock().await;
         let broadcaster = broadcaster.as_ref()
-            .ok_or_else(|| GdkError::Network("Transaction broadcaster not initialized".to_string()))?;
+            .ok_or_else(|| GdkError::network_simple("Transaction broadcaster not initialized".to_string()))?;
 
         Ok(broadcaster.get_transaction_status(txid).await)
     }
@@ -811,7 +818,7 @@ impl Session {
     pub async fn get_all_tracked_transactions(&self) -> Result<std::collections::HashMap<String, TransactionStatus>> {
         let broadcaster = self.transaction_broadcaster.lock().await;
         let broadcaster = broadcaster.as_ref()
-            .ok_or_else(|| GdkError::Network("Transaction broadcaster not initialized".to_string()))?;
+            .ok_or_else(|| GdkError::network_simple("Transaction broadcaster not initialized".to_string()))?;
 
         Ok(broadcaster.get_all_tracked_transactions().await)
     }
@@ -820,7 +827,7 @@ impl Session {
     pub async fn stop_tracking_transaction(&self, txid: &str) -> Result<()> {
         let broadcaster = self.transaction_broadcaster.lock().await;
         let broadcaster = broadcaster.as_ref()
-            .ok_or_else(|| GdkError::Network("Transaction broadcaster not initialized".to_string()))?;
+            .ok_or_else(|| GdkError::network_simple("Transaction broadcaster not initialized".to_string()))?;
 
         broadcaster.stop_tracking(txid).await
     }

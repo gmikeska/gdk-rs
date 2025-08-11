@@ -8,12 +8,9 @@
 //! - Comprehensive error handling and recovery
 
 use crate::error::GdkError;
-use crate::protocol::{MethodCall, Notification, JsonRpcBatchRequest, JsonRpcResponse};
-use crate::jsonrpc::{JsonRpcClient, JsonRpcConfig};
+use crate::protocol::{MethodCall, Notification};
 use crate::Result;
 
-#[cfg(feature = "tor-support")]
-use crate::tor::{TorManager, TorConfig};
 use futures_util::{SinkExt, StreamExt};
 use serde_json::Value;
 use std::collections::{HashMap, VecDeque};
@@ -21,7 +18,7 @@ use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{broadcast, mpsc, oneshot, Mutex, RwLock, Semaphore};
 use tokio::time::{interval, sleep, timeout};
-use tokio_tungstenite::tungstenite::{Message, Error as TungsteniteError};
+use tokio_tungstenite::tungstenite::Message;
 use tokio_tungstenite::{WebSocketStream, connect_async, connect_async_tls_with_config};
 use tokio::net::TcpStream;
 use uuid::Uuid;
@@ -68,7 +65,7 @@ pub enum DeliveryGuarantee {
 }
 
 /// Queued message with delivery tracking
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub struct QueuedMessage {
     pub id: Uuid,
     pub content: String,
@@ -128,11 +125,11 @@ impl MessageQueue {
     pub async fn enqueue(&self, message: QueuedMessage) -> Result<()> {
         // Acquire semaphore permit to enforce queue size limit
         let _permit = self.semaphore.acquire().await
-            .map_err(|_| GdkError::Network("Message queue semaphore closed".to_string()))?;
+            .map_err(|_| GdkError::network_simple("Message queue semaphore closed".to_string()))?;
 
         let mut pending = self.pending.lock().await;
         if pending.len() >= self.max_queue_size {
-            return Err(GdkError::Network("Message queue is full".to_string()));
+            return Err(GdkError::network_simple("Message queue is full".to_string()));
         }
         
         pending.push_back(message);
@@ -167,12 +164,12 @@ impl MessageQueue {
             } else {
                 // Max attempts reached, notify failure
                 if let Some(ack_tx) = message.ack_tx {
-                    let _ = ack_tx.send(Err(GdkError::Network("Max delivery attempts exceeded".to_string())));
+                    let _ = ack_tx.send(Err(GdkError::network_simple("Max delivery attempts exceeded".to_string())));
                 }
-                Err(GdkError::Network("Message delivery failed after max attempts".to_string()))
+                Err(GdkError::network_simple("Message delivery failed after max attempts".to_string()))
             }
         } else {
-            Err(GdkError::Network("Message not found in flight queue".to_string()))
+            Err(GdkError::network_simple("Message not found in flight queue".to_string()))
         }
     }
 
@@ -369,14 +366,14 @@ impl ConnectionPool {
             }
         }
 
-        Err(GdkError::Network("Failed to connect to any endpoint".to_string()))
+        Err(GdkError::network_simple("Failed to connect to any endpoint".to_string()))
     }
 
     pub async fn call(&self, method: &str, params: Value) -> Result<Value> {
         let connection = self.active_connection.read().await;
         match connection.as_ref() {
             Some(conn) => conn.call(method, params).await,
-            None => Err(GdkError::Network("No active connection".to_string())),
+            None => Err(GdkError::network_simple("No active connection".to_string())),
         }
     }
 
@@ -466,7 +463,7 @@ impl Connection {
         // Check if we're connected
         let state = self.state.read().await;
         if *state != ConnectionState::Connected {
-            return Err(GdkError::Network(format!("Connection not ready, state: {:?}", *state)));
+            return Err(GdkError::network_simple(format!("Connection not ready, state: {:?}", *state)));
         }
         drop(state);
 
@@ -481,27 +478,27 @@ impl Connection {
         };
 
         if self.request_tx.send(request).await.is_err() {
-            return Err(GdkError::Network("Connection task has died".to_string()));
+            return Err(GdkError::network_simple("Connection task has died".to_string()));
         }
 
         // Add timeout for the response
         match timeout(Duration::from_secs(30), response_rx).await {
             Ok(Ok(result)) => result,
-            Ok(Err(_)) => Err(GdkError::Network("Connection task dropped the response sender".to_string())),
-            Err(_) => Err(GdkError::Network("Request timeout".to_string())),
+            Ok(Err(_)) => Err(GdkError::network_simple("Connection task dropped the response sender".to_string())),
+            Err(_) => Err(GdkError::network_simple("Request timeout".to_string())),
         }
     }
 
     pub async fn disconnect(&self) -> Result<()> {
         if self.control_tx.send(ConnectionControl::Disconnect).await.is_err() {
-            return Err(GdkError::Network("Connection control task has died".to_string()));
+            return Err(GdkError::network_simple("Connection control task has died".to_string()));
         }
         Ok(())
     }
 
     pub async fn reconnect(&self) -> Result<()> {
         if self.control_tx.send(ConnectionControl::Reconnect).await.is_err() {
-            return Err(GdkError::Network("Connection control task has died".to_string()));
+            return Err(GdkError::network_simple("Connection control task has died".to_string()));
         }
         Ok(())
     }
@@ -534,7 +531,7 @@ fn start_connection_manager(
     tokio::spawn(async move {
         let mut reconnect_attempts = 0u32;
         let mut reconnect_delay = config.initial_reconnect_delay;
-        let mut should_reconnect = true;
+        let should_reconnect = true;
 
         while should_reconnect {
             // Update state to connecting
@@ -565,7 +562,6 @@ fn start_connection_manager(
                     ).await;
 
                     if disconnect_requested {
-                        should_reconnect = false;
                         *state.write().await = ConnectionState::Disconnected;
                         break;
                     }
@@ -582,8 +578,7 @@ fn start_connection_manager(
                     if let Some(max_attempts) = config.max_reconnect_attempts {
                         if reconnect_attempts >= max_attempts {
                             log::error!("Max reconnection attempts ({}) reached, giving up", max_attempts);
-                            should_reconnect = false;
-                            break;
+                                break;
                         }
                     }
                 }
@@ -603,7 +598,7 @@ fn start_connection_manager(
 
         // Clean up any pending requests
         while let Ok(request) = request_rx.try_recv() {
-            let _ = request.response_tx.send(Err(GdkError::Network("Connection closed".to_string())));
+            let _ = request.response_tx.send(Err(GdkError::network_simple("Connection closed".to_string())));
         }
 
         log::info!("Connection manager finished.");
@@ -659,7 +654,7 @@ fn create_tls_connector(tls_config: &TlsConfig) -> Result<tokio_tungstenite::Con
     // In a full implementation, we would configure the TLS connector based on tls_config
     // This would involve setting up custom certificate stores, client certificates, etc.
     Ok(Connector::NativeTls(native_tls::TlsConnector::new()
-        .map_err(|e| GdkError::Network(format!("Failed to create TLS connector: {}", e)))?))
+        .map_err(|e| GdkError::network_simple(format!("Failed to create TLS connector: {}", e)))?))
 }
 
 /// Map WebSocket errors to GdkError with detailed context
@@ -668,40 +663,37 @@ fn map_websocket_error(error: tokio_tungstenite::tungstenite::Error) -> GdkError
     
     match error {
         WsError::ConnectionClosed => {
-            GdkError::Network("WebSocket connection was closed".to_string())
+            GdkError::network_simple("WebSocket connection was closed".to_string())
         }
         WsError::AlreadyClosed => {
-            GdkError::Network("WebSocket connection is already closed".to_string())
+            GdkError::network_simple("WebSocket connection is already closed".to_string())
         }
         WsError::Io(io_err) => {
-            GdkError::Network(format!("WebSocket I/O error: {}", io_err))
+            GdkError::network_simple(format!("WebSocket I/O error: {}", io_err))
         }
         WsError::Tls(tls_err) => {
-            GdkError::Network(format!("WebSocket TLS error: {}", tls_err))
+            GdkError::network_simple(format!("WebSocket TLS error: {}", tls_err))
         }
         WsError::Capacity(cap_err) => {
-            GdkError::Network(format!("WebSocket capacity error: {}", cap_err))
+            GdkError::network_simple(format!("WebSocket capacity error: {}", cap_err))
         }
         WsError::Protocol(protocol_err) => {
-            GdkError::Network(format!("WebSocket protocol error: {}", protocol_err))
-        }
-        WsError::SendQueueFull(_) => {
-            GdkError::Network("WebSocket send queue is full".to_string())
+            GdkError::network_simple(format!("WebSocket protocol error: {}", protocol_err))
         }
         WsError::Utf8 => {
-            GdkError::Network("WebSocket UTF-8 encoding error".to_string())
+            GdkError::network_simple("WebSocket UTF-8 encoding error".to_string())
         }
         WsError::Url(url_err) => {
-            GdkError::Network(format!("WebSocket URL error: {}", url_err))
+            GdkError::network_simple(format!("WebSocket URL error: {}", url_err))
         }
         WsError::Http(response) => {
-            GdkError::Network(format!("WebSocket HTTP error: {}", response.status()))
+            GdkError::network_simple(format!("WebSocket HTTP error: {}", response.status()))
         }
         WsError::HttpFormat(http_err) => {
-            GdkError::Network(format!("WebSocket HTTP format error: {}", http_err))
+            GdkError::network_simple(format!("WebSocket HTTP format error: {}", http_err))
         }
         _ => {
-            GdkError::Network(format!("WebSocket error: {}", error))
+            GdkError::network_simple(format!("WebSocket error: {}", error))
         }
     }
 }
@@ -765,7 +757,7 @@ async fn run_connection(
                 let msg = match serde_json::to_string(&call) {
                     Ok(msg) => msg,
                     Err(e) => {
-                        let _ = request.response_tx.send(Err(GdkError::Json(e.to_string())));
+                        let _ = request.response_tx.send(Err(GdkError::json_simple(e.to_string())));
                         continue;
                     }
                 };
@@ -817,7 +809,7 @@ async fn send_ping(
     }
 
     ws_tx.send(Message::Ping(ping_data)).await
-        .map_err(|e| GdkError::Network(e.to_string()))
+        .map_err(|e| GdkError::network_simple(e.to_string()))
 }
 
 /// Compress message if it exceeds threshold and compression is enabled
@@ -829,9 +821,9 @@ fn compress_message(data: &str, config: &ConnectionConfig) -> Result<Vec<u8>> {
 
     let mut encoder = GzEncoder::new(Vec::new(), Compression::default());
     encoder.write_all(data.as_bytes())
-        .map_err(|e| GdkError::Network(format!("Compression failed: {}", e)))?;
+        .map_err(|e| GdkError::network_simple(format!("Compression failed: {}", e)))?;
     encoder.finish()
-        .map_err(|e| GdkError::Network(format!("Compression finalization failed: {}", e)))
+        .map_err(|e| GdkError::network_simple(format!("Compression finalization failed: {}", e)))
 }
 
 #[cfg(not(feature = "compression"))]
@@ -851,7 +843,7 @@ fn decompress_message(data: &[u8]) -> Result<String> {
         Err(_) => {
             // Assume it's uncompressed text
             String::from_utf8(data.to_vec())
-                .map_err(|e| GdkError::Network(format!("Invalid UTF-8: {}", e)))
+                .map_err(|e| GdkError::network_simple(format!("Invalid UTF-8: {}", e)))
         }
     }
 }
@@ -859,7 +851,7 @@ fn decompress_message(data: &[u8]) -> Result<String> {
 #[cfg(not(feature = "compression"))]
 fn decompress_message(data: &[u8]) -> Result<String> {
     String::from_utf8(data.to_vec())
-        .map_err(|e| GdkError::Network(format!("Invalid UTF-8: {}", e)))
+        .map_err(|e| GdkError::network_simple(format!("Invalid UTF-8: {}", e)))
 }
 
 /// Send a message with optional compression
@@ -878,7 +870,7 @@ async fn send_compressed_message(
     };
 
     ws_tx.send(ws_message).await
-        .map_err(|e| GdkError::Network(e.to_string()))
+        .map_err(|e| GdkError::network_simple(e.to_string()))
 }
 
 async fn handle_message(
@@ -907,9 +899,9 @@ async fn handle_message(
                             let _ = tx.send(Ok(result_val));
                         } else if let Some(error_val) = value.get("error").cloned() {
                             let err_msg = error_val.as_str().unwrap_or("Unknown error").to_string();
-                            let _ = tx.send(Err(GdkError::Network(err_msg)));
+                            let _ = tx.send(Err(GdkError::network_simple(err_msg)));
                         } else {
-                            let _ = tx.send(Err(GdkError::Network("Invalid response format".to_string())));
+                            let _ = tx.send(Err(GdkError::network_simple("Invalid response format".to_string())));
                         }
                         return true; // Continue processing
                     }
@@ -969,9 +961,9 @@ async fn handle_message(
                                     let _ = tx.send(Ok(result_val));
                                 } else if let Some(error_val) = value.get("error").cloned() {
                                     let err_msg = error_val.as_str().unwrap_or("Unknown error").to_string();
-                                    let _ = tx.send(Err(GdkError::Network(err_msg)));
+                                    let _ = tx.send(Err(GdkError::network_simple(err_msg)));
                                 } else {
-                                    let _ = tx.send(Err(GdkError::Network("Invalid response format".to_string())));
+                                    let _ = tx.send(Err(GdkError::network_simple("Invalid response format".to_string())));
                                 }
                                 return true; // Continue processing
                             }

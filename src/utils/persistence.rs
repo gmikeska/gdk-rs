@@ -10,10 +10,10 @@
 use crate::{GdkError, Result};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
-use std::fs::{self, File, OpenOptions};
-use std::io::{BufReader, BufWriter, Read, Write};
+use std::fs::{self, File};
+use std::io::{BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime};
 
 /// Default cache expiration time
 pub const DEFAULT_CACHE_EXPIRATION: Duration = Duration::from_secs(3600); // 1 hour
@@ -59,7 +59,7 @@ impl FileStorage {
         // Ensure data directory exists
         if !config.data_dir.exists() {
             fs::create_dir_all(&config.data_dir)
-                .map_err(|e| GdkError::Persistence(format!("Failed to create data directory: {}", e)))?;
+                .map_err(|e| GdkError::persistence_simple(format!("Failed to create data directory: {}", e)))?;
         }
 
         Ok(Self { config })
@@ -72,16 +72,16 @@ impl FileStorage {
         // Create parent directories if they don't exist
         if let Some(parent) = file_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| GdkError::Persistence(format!("Failed to create directory: {}", e)))?;
+                .map_err(|e| GdkError::persistence_simple(format!("Failed to create directory: {}", e)))?;
         }
 
         // Serialize data
         let serialized = serde_json::to_vec_pretty(data)
-            .map_err(|e| GdkError::Persistence(format!("Serialization failed: {}", e)))?;
+            .map_err(|e| GdkError::persistence_simple(format!("Serialization failed: {}", e)))?;
 
         // Check file size limit
         if serialized.len() > self.config.max_file_size {
-            return Err(GdkError::Persistence(format!(
+            return Err(GdkError::persistence_simple(format!(
                 "Data size {} exceeds maximum file size {}",
                 serialized.len(),
                 self.config.max_file_size
@@ -95,13 +95,13 @@ impl FileStorage {
 
         // Write data to file
         let mut file = File::create(&file_path)
-            .map_err(|e| GdkError::Persistence(format!("Failed to create file: {}", e)))?;
+            .map_err(|e| GdkError::persistence_simple(format!("Failed to create file: {}", e)))?;
 
         file.write_all(&serialized)
-            .map_err(|e| GdkError::Persistence(format!("Failed to write data: {}", e)))?;
+            .map_err(|e| GdkError::persistence_simple(format!("Failed to write data: {}", e)))?;
 
         file.sync_all()
-            .map_err(|e| GdkError::Persistence(format!("Failed to sync file: {}", e)))?;
+            .map_err(|e| GdkError::persistence_simple(format!("Failed to sync file: {}", e)))?;
 
         log::debug!("Stored data to file: {:?}", file_path);
         Ok(())
@@ -112,15 +112,15 @@ impl FileStorage {
         let file_path = self.get_file_path(key);
         
         if !file_path.exists() {
-            return Err(GdkError::Persistence(format!("File not found: {:?}", file_path)));
+            return Err(GdkError::persistence_simple(format!("File not found: {:?}", file_path)));
         }
 
         let file = File::open(&file_path)
-            .map_err(|e| GdkError::Persistence(format!("Failed to open file: {}", e)))?;
+            .map_err(|e| GdkError::persistence_simple(format!("Failed to open file: {}", e)))?;
 
         let reader = BufReader::new(file);
         let data = serde_json::from_reader(reader)
-            .map_err(|e| GdkError::Persistence(format!("Deserialization failed: {}", e)))?;
+            .map_err(|e| GdkError::persistence_simple(format!("Deserialization failed: {}", e)))?;
 
         log::debug!("Loaded data from file: {:?}", file_path);
         Ok(data)
@@ -137,7 +137,7 @@ impl FileStorage {
         
         if file_path.exists() {
             fs::remove_file(&file_path)
-                .map_err(|e| GdkError::Persistence(format!("Failed to delete file: {}", e)))?;
+                .map_err(|e| GdkError::persistence_simple(format!("Failed to delete file: {}", e)))?;
             log::debug!("Deleted file: {:?}", file_path);
         }
 
@@ -155,7 +155,7 @@ impl FileStorage {
     pub fn get_file_size(&self, key: &str) -> Result<u64> {
         let file_path = self.get_file_path(key);
         let metadata = fs::metadata(&file_path)
-            .map_err(|e| GdkError::Persistence(format!("Failed to get file metadata: {}", e)))?;
+            .map_err(|e| GdkError::persistence_simple(format!("Failed to get file metadata: {}", e)))?;
         Ok(metadata.len())
     }
 
@@ -163,9 +163,9 @@ impl FileStorage {
     pub fn get_modification_time(&self, key: &str) -> Result<SystemTime> {
         let file_path = self.get_file_path(key);
         let metadata = fs::metadata(&file_path)
-            .map_err(|e| GdkError::Persistence(format!("Failed to get file metadata: {}", e)))?;
+            .map_err(|e| GdkError::persistence_simple(format!("Failed to get file metadata: {}", e)))?;
         metadata.modified()
-            .map_err(|e| GdkError::Persistence(format!("Failed to get modification time: {}", e)))
+            .map_err(|e| GdkError::persistence_simple(format!("Failed to get modification time: {}", e)))
     }
 
     /// Store binary data
@@ -174,11 +174,11 @@ impl FileStorage {
         
         if let Some(parent) = file_path.parent() {
             fs::create_dir_all(parent)
-                .map_err(|e| GdkError::Persistence(format!("Failed to create directory: {}", e)))?;
+                .map_err(|e| GdkError::persistence_simple(format!("Failed to create directory: {}", e)))?;
         }
 
         if data.len() > self.config.max_file_size {
-            return Err(GdkError::Persistence(format!(
+            return Err(GdkError::persistence_simple(format!(
                 "Data size {} exceeds maximum file size {}",
                 data.len(),
                 self.config.max_file_size
@@ -190,7 +190,7 @@ impl FileStorage {
         }
 
         fs::write(&file_path, data)
-            .map_err(|e| GdkError::Persistence(format!("Failed to write binary data: {}", e)))?;
+            .map_err(|e| GdkError::persistence_simple(format!("Failed to write binary data: {}", e)))?;
 
         log::debug!("Stored binary data to file: {:?}", file_path);
         Ok(())
@@ -201,13 +201,13 @@ impl FileStorage {
         let file_path = self.get_file_path(key);
         
         fs::read(&file_path)
-            .map_err(|e| GdkError::Persistence(format!("Failed to read binary data: {}", e)))
+            .map_err(|e| GdkError::persistence_simple(format!("Failed to read binary data: {}", e)))
     }
 
     /// Get the file path for a given key
     fn get_file_path(&self, key: &str) -> PathBuf {
         // Sanitize the key to prevent directory traversal
-        let sanitized_key = key.replace(['/', '\\', '..'], "_");
+        let sanitized_key = key.replace(['/', '\\'], "_").replace("..", "_");
         self.config.data_dir.join(format!("{}.json", sanitized_key))
     }
 
@@ -215,7 +215,7 @@ impl FileStorage {
     fn create_backup(&self, file_path: &Path) -> Result<()> {
         let backup_path = file_path.with_extension("json.backup");
         fs::copy(file_path, &backup_path)
-            .map_err(|e| GdkError::Persistence(format!("Failed to create backup: {}", e)))?;
+            .map_err(|e| GdkError::persistence_simple(format!("Failed to create backup: {}", e)))?;
         
         // Clean up old backups
         self.cleanup_old_backups(file_path)?;
@@ -232,11 +232,11 @@ impl FileStorage {
     /// Recursively collect all keys from the data directory
     fn collect_keys(&self, dir: &Path, prefix: &str, keys: &mut Vec<String>) -> Result<()> {
         let entries = fs::read_dir(dir)
-            .map_err(|e| GdkError::Persistence(format!("Failed to read directory: {}", e)))?;
+            .map_err(|e| GdkError::persistence_simple(format!("Failed to read directory: {}", e)))?;
 
         for entry in entries {
             let entry = entry
-                .map_err(|e| GdkError::Persistence(format!("Failed to read directory entry: {}", e)))?;
+                .map_err(|e| GdkError::persistence_simple(format!("Failed to read directory entry: {}", e)))?;
             let path = entry.path();
 
             if path.is_file() {
@@ -314,7 +314,7 @@ impl<T: Clone> MemoryCache<T> {
         }
 
         if size > self.max_size {
-            return Err(GdkError::Persistence(format!(
+            return Err(GdkError::persistence_simple(format!(
                 "Item size {} exceeds cache capacity {}",
                 size, self.max_size
             )));
@@ -438,7 +438,7 @@ impl<T: Clone + Serialize + for<'de> Deserialize<'de>> PersistentCache<T> {
                 let _ = self.memory_cache.set(key.to_string(), value.clone(), 1024); // Estimate size
                 Ok(Some(value))
             }
-            Err(GdkError::Persistence(_)) => Ok(None), // File not found
+            Err(ref e) if matches!(e, GdkError::Persistence { .. }) => Ok(None), // File not found
             Err(e) => Err(e),
         }
     }

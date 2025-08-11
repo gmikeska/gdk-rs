@@ -238,7 +238,7 @@ impl Decodable for Transaction {
                 let input = Vec::<TxIn>::consensus_decode(reader)?;
                 (input, true)
             } else {
-                return Err(GdkError::InvalidInput("Invalid witness flag".to_string()));
+                return Err(GdkError::invalid_input_simple("Invalid witness flag".to_string()));
             }
         } else {
             // This is a legacy transaction, first_byte[0] is the start of input count varint
@@ -257,7 +257,7 @@ impl Decodable for Transaction {
                 reader.read_exact(&mut buf)?;
                 u64::from_le_bytes(buf)
             } else {
-                return Err(GdkError::InvalidInput("Invalid varint".to_string()));
+                return Err(GdkError::invalid_input_simple("Invalid varint".to_string()));
             };
             
             let mut input = Vec::with_capacity(input_count as usize);

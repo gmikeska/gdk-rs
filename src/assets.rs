@@ -86,10 +86,10 @@ impl Asset {
     /// Get the asset ID as bytes
     pub fn asset_id_bytes(&self) -> Result<AssetId> {
         let bytes = hex::decode(&self.asset_id)
-            .map_err(|e| GdkError::InvalidInput(format!("Invalid asset ID hex: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Invalid asset ID hex: {}", e)))?;
         
         if bytes.len() != 32 {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Asset ID must be 32 bytes".to_string()
             ));
         }
@@ -103,27 +103,27 @@ impl Asset {
     pub fn validate(&self) -> Result<()> {
         // Validate asset ID format
         if self.asset_id.len() != 64 {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Asset ID must be 64 hex characters".to_string()
             ));
         }
 
         // Validate hex encoding
         hex::decode(&self.asset_id)
-            .map_err(|_| GdkError::InvalidInput("Asset ID must be valid hex".to_string()))?;
+            .map_err(|_| GdkError::invalid_input_simple("Asset ID must be valid hex".to_string()))?;
 
         // Validate name and ticker are not empty
         if self.name.is_empty() {
-            return Err(GdkError::InvalidInput("Asset name cannot be empty".to_string()));
+            return Err(GdkError::invalid_input_simple("Asset name cannot be empty".to_string()));
         }
 
         if self.ticker.is_empty() {
-            return Err(GdkError::InvalidInput("Asset ticker cannot be empty".to_string()));
+            return Err(GdkError::invalid_input_simple("Asset ticker cannot be empty".to_string()));
         }
 
         // Validate precision is reasonable (0-18 decimal places)
         if self.precision > 18 {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Asset precision cannot exceed 18 decimal places".to_string()
             ));
         }
@@ -134,7 +134,7 @@ impl Asset {
     /// Update the asset with new information
     pub fn update(&mut self, other: &Asset) -> Result<()> {
         if self.asset_id != other.asset_id {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Cannot update asset with different asset ID".to_string()
             ));
         }
@@ -359,7 +359,7 @@ impl AssetRegistry {
         
         // Check cache size limit
         if cache.len() >= self.config.max_cache_size && !cache.contains_key(&asset.asset_id) {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Asset registry cache is full".to_string()
             ));
         }
@@ -580,7 +580,7 @@ impl AssetRegistry {
         if let Some(ref registry_url) = self.config.registry_url {
             self.fetch_assets_from_url(registry_url).await
         } else {
-            Err(GdkError::Network("No registry URL configured".to_string()))
+            Err(GdkError::network_simple("No registry URL configured".to_string()))
         }
     }
 
@@ -776,17 +776,17 @@ impl AssetRegistry {
 
         // Create directory if it doesn't exist
         tokio::fs::create_dir_all(registry_dir).await
-            .map_err(|e| GdkError::Io(e.to_string()))?;
+            .map_err(|e| GdkError::io_simple(e.to_string()))?;
 
         let registry_file = registry_dir.join("assets.json");
         let cache = self.cache.read().unwrap();
         let assets: Vec<Asset> = cache.values().cloned().collect();
 
         let json_data = serde_json::to_string_pretty(&assets)
-            .map_err(|e| GdkError::Json(e.to_string()))?;
+            .map_err(|e| GdkError::json_simple(e.to_string()))?;
 
         tokio::fs::write(&registry_file, json_data).await
-            .map_err(|e| GdkError::Io(e.to_string()))?;
+            .map_err(|e| GdkError::io_simple(e.to_string()))?;
 
         log::info!("Saved {} assets to {}", assets.len(), registry_file.display());
         Ok(())
@@ -807,10 +807,10 @@ impl AssetRegistry {
         }
 
         let json_data = tokio::fs::read_to_string(&registry_file).await
-            .map_err(|e| GdkError::Io(e.to_string()))?;
+            .map_err(|e| GdkError::io_simple(e.to_string()))?;
 
         let assets: Vec<Asset> = serde_json::from_str(&json_data)
-            .map_err(|e| GdkError::Json(e.to_string()))?;
+            .map_err(|e| GdkError::json_simple(e.to_string()))?;
 
         let mut loaded_count = 0;
         for asset in assets {

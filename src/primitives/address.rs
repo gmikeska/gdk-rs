@@ -192,12 +192,12 @@ impl Address {
             AddressPayload::P2PKH(hash) | AddressPayload::P2SH(hash) | 
             AddressPayload::P2WPKH(hash) => {
                 if hash.len() != 20 {
-                    return Err(GdkError::InvalidInput("Invalid hash160 length".to_string()));
+                    return Err(GdkError::invalid_input_simple("Invalid hash160 length".to_string()));
                 }
             }
             AddressPayload::P2WSH(hash) => {
                 if hash.len() != 32 {
-                    return Err(GdkError::InvalidInput("Invalid hash256 length".to_string()));
+                    return Err(GdkError::invalid_input_simple("Invalid hash256 length".to_string()));
                 }
             }
             AddressPayload::P2TR(_) => {
@@ -216,43 +216,43 @@ impl Address {
                 let mut data = vec![bech32::u5::try_from_u8(0).unwrap()]; // witness version 0
                 data.extend_from_slice(&hash.to_base32());
                 bech32::encode(hrp, data, Variant::Bech32)
-                    .map_err(|e| GdkError::InvalidInput(format!("Bech32 encoding error: {}", e)))
+                    .map_err(|e| GdkError::invalid_input_simple(format!("Bech32 encoding error: {}", e)))
             }
             AddressPayload::P2WSH(hash) => {
                 let mut data = vec![bech32::u5::try_from_u8(0).unwrap()]; // witness version 0
                 data.extend_from_slice(&hash.to_base32());
                 bech32::encode(hrp, data, Variant::Bech32)
-                    .map_err(|e| GdkError::InvalidInput(format!("Bech32 encoding error: {}", e)))
+                    .map_err(|e| GdkError::invalid_input_simple(format!("Bech32 encoding error: {}", e)))
             }
             AddressPayload::P2TR(key) => {
                 let mut data = vec![bech32::u5::try_from_u8(1).unwrap()]; // witness version 1
                 data.extend_from_slice(&key.to_base32());
                 bech32::encode(hrp, data, Variant::Bech32m)
-                    .map_err(|e| GdkError::InvalidInput(format!("Bech32m encoding error: {}", e)))
+                    .map_err(|e| GdkError::invalid_input_simple(format!("Bech32m encoding error: {}", e)))
             }
-            _ => Err(GdkError::InvalidInput("Not a SegWit address".to_string())),
+            _ => Err(GdkError::invalid_input_simple("Not a SegWit address".to_string())),
         }
     }
 
     /// Parse a Bech32 address string
     fn from_bech32(s: &str) -> Result<Self> {
         let (hrp, data, variant) = bech32::decode(s)
-            .map_err(|e| GdkError::InvalidInput(format!("Bech32 decode error: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Bech32 decode error: {}", e)))?;
 
         let network = match hrp.as_str() {
             "bc" => Network::Mainnet,
             "tb" => Network::Testnet,
             "bcrt" => Network::Regtest,
-            _ => return Err(GdkError::InvalidInput(format!("Unknown HRP: {}", hrp))),
+            _ => return Err(GdkError::invalid_input_simple(format!("Unknown HRP: {}", hrp))),
         };
 
         if data.is_empty() {
-            return Err(GdkError::InvalidInput("Empty witness program".to_string()));
+            return Err(GdkError::invalid_input_simple("Empty witness program".to_string()));
         }
 
         let witness_version = data[0];
         let program = Vec::<u8>::from_base32(&data[1..])
-            .map_err(|e| GdkError::InvalidInput(format!("Base32 decode error: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Base32 decode error: {}", e)))?;
 
         let witness_version_u8 = witness_version.to_u8();
         match (witness_version_u8, program.len(), variant) {
@@ -280,7 +280,7 @@ impl Address {
                     payload: AddressPayload::P2TR(key),
                 })
             }
-            _ => Err(GdkError::InvalidInput(format!(
+            _ => Err(GdkError::invalid_input_simple(format!(
                 "Invalid witness program: version={}, length={}, variant={:?}",
                 witness_version_u8, program.len(), variant
             ))),
@@ -290,10 +290,10 @@ impl Address {
     /// Parse a Base58Check address string
     fn from_base58check(s: &str) -> Result<Self> {
         let (version, payload) = s.from_base58check()
-            .map_err(|e| GdkError::InvalidInput(format!("Base58Check decode error: {:?}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Base58Check decode error: {:?}", e)))?;
 
         if payload.len() != 20 {
-            return Err(GdkError::InvalidInput("Invalid address payload length".to_string()));
+            return Err(GdkError::invalid_input_simple("Invalid address payload length".to_string()));
         }
 
         let mut hash = [0u8; 20];
@@ -316,7 +316,7 @@ impl Address {
                 network: Network::Testnet,
                 payload: AddressPayload::P2SH(hash),
             }),
-            _ => Err(GdkError::InvalidInput(format!("Unknown address version: {:#x}", version))),
+            _ => Err(GdkError::invalid_input_simple(format!("Unknown address version: {:#x}", version))),
         }
     }
 

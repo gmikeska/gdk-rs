@@ -3,10 +3,7 @@
 use gdk_rs::transaction_builder::*;
 use gdk_rs::primitives::transaction::*;
 use gdk_rs::primitives::script::Script;
-use gdk_rs::primitives::address::{Address, Network};
-use gdk_rs::{GdkError, Result};
-use secp256k1::{Secp256k1, SecretKey, PublicKey};
-use std::str::FromStr;
+use gdk_rs::primitives::address::Network;
 
 #[test]
 fn test_transaction_builder_new() {

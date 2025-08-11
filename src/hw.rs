@@ -256,7 +256,7 @@ impl HardwareWalletManager {
                 Err(e) => {
                     attempts += 1;
                     if attempts >= self.max_retry_attempts {
-                        return Err(GdkError::Auth(format!(
+                        return Err(GdkError::auth_simple(format!(
                             "Failed to connect to hardware wallet after {} attempts: {}",
                             attempts, e
                         )));
@@ -267,7 +267,7 @@ impl HardwareWalletManager {
             }
         }
         
-        Err(GdkError::Auth("Failed to connect to hardware wallet".to_string()))
+        Err(GdkError::auth_simple("Failed to connect to hardware wallet".to_string()))
     }
     
     /// Disconnect from a hardware wallet device
@@ -297,7 +297,7 @@ impl HardwareWalletManager {
         if let Some(device) = devices.get(device_id) {
             device.get_auth_credentials().await
         } else {
-            Err(GdkError::Auth("Hardware wallet device not connected".to_string()))
+            Err(GdkError::auth_simple("Hardware wallet device not connected".to_string()))
         }
     }
     
@@ -307,7 +307,7 @@ impl HardwareWalletManager {
         if let Some(device) = devices.get(device_id) {
             device.verify_device().await
         } else {
-            Err(GdkError::Auth("Hardware wallet device not connected".to_string()))
+            Err(GdkError::auth_simple("Hardware wallet device not connected".to_string()))
         }
     }
 
@@ -339,7 +339,7 @@ impl HardwareWalletManager {
             session.state = SessionState::Active;
             Ok(())
         } else {
-            Err(GdkError::HardwareWallet("Session not found".to_string()))
+            Err(GdkError::hardware_wallet_simple("Session not found".to_string()))
         }
     }
 
@@ -350,7 +350,7 @@ impl HardwareWalletManager {
             session.state = SessionState::Terminated;
             Ok(())
         } else {
-            Err(GdkError::HardwareWallet("Session not found".to_string()))
+            Err(GdkError::hardware_wallet_simple("Session not found".to_string()))
         }
     }
 
@@ -518,7 +518,7 @@ impl HardwareWalletManager {
         let devices = self.discover_devices().await?;
         devices.into_iter()
             .find(|d| d.device_id == device_id)
-            .ok_or_else(|| GdkError::Auth(format!("Hardware wallet device not found: {}", device_id)))
+            .ok_or_else(|| GdkError::auth_simple(format!("Hardware wallet device not found: {}", device_id)))
     }
     
     pub fn create_device_instance(&self, device_info: &HardwareWalletInfo) -> Result<Box<dyn HardwareWallet>, GdkError> {
@@ -590,34 +590,34 @@ impl HardwareWallet for LedgerDevice {
     
     async fn get_master_xpub(&self) -> Result<ExtendedPublicKey, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         // Mock implementation - would communicate with actual device
-        Err(GdkError::Auth("Mock implementation - not yet implemented".to_string()))
+        Err(GdkError::auth_simple("Mock implementation - not yet implemented".to_string()))
     }
     
     async fn get_xpub(&self, _derivation_path: &DerivationPath) -> Result<ExtendedPublicKey, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         // Mock implementation
-        Err(GdkError::Auth("Mock implementation - not yet implemented".to_string()))
+        Err(GdkError::auth_simple("Mock implementation - not yet implemented".to_string()))
     }
     
     async fn get_address(&self, _derivation_path: &DerivationPath) -> Result<Address, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         // Mock implementation
-        Err(GdkError::Auth("Mock implementation - not yet implemented".to_string()))
+        Err(GdkError::auth_simple("Mock implementation - not yet implemented".to_string()))
     }
     
     async fn display_address(&self, _derivation_path: &DerivationPath) -> Result<bool, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         // Mock implementation - would show address on device screen
@@ -626,11 +626,11 @@ impl HardwareWallet for LedgerDevice {
     
     async fn sign_psbt(&self, psbt: &PartiallySignedTransaction) -> Result<PartiallySignedTransaction, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         // Mock implementation - in real implementation would communicate with Ledger device
-        let mut signed_psbt = psbt.clone();
+        let signed_psbt = psbt.clone();
         
         // Simulate signing process
         log::info!("Ledger: Signing PSBT with {} inputs", signed_psbt.inputs.len());
@@ -649,17 +649,17 @@ impl HardwareWallet for LedgerDevice {
     
     async fn sign_psbt_inputs(&self, psbt: &PartiallySignedTransaction, input_indices: &[usize]) -> Result<PartiallySignedTransaction, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
-        let mut signed_psbt = psbt.clone();
+        let signed_psbt = psbt.clone();
         
         log::info!("Ledger: Signing PSBT inputs {:?}", input_indices);
         
         // Validate input indices
         for &index in input_indices {
             if index >= signed_psbt.inputs.len() {
-                return Err(GdkError::InvalidInput(format!("Input index {} out of bounds", index)));
+                return Err(GdkError::invalid_input_simple(format!("Input index {} out of bounds", index)));
             }
         }
         
@@ -671,7 +671,7 @@ impl HardwareWallet for LedgerDevice {
     
     async fn display_transaction(&self, psbt: &PartiallySignedTransaction) -> Result<bool, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         log::info!("Ledger: Displaying transaction on device for confirmation");
@@ -686,7 +686,7 @@ impl HardwareWallet for LedgerDevice {
     
     async fn get_signing_capabilities(&self, psbt: &PartiallySignedTransaction) -> Result<HardwareWalletSigningCapabilities, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         let mut signable_inputs = Vec::new();
@@ -722,16 +722,16 @@ impl HardwareWallet for LedgerDevice {
     
     async fn sign_message(&self, _derivation_path: &DerivationPath, _message: &[u8]) -> Result<Vec<u8>, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         // Ledger doesn't support message signing in this mock
-        Err(GdkError::Auth("Message signing not supported on this device".to_string()))
+        Err(GdkError::auth_simple("Message signing not supported on this device".to_string()))
     }
     
     async fn verify_device(&self) -> Result<bool, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         // Mock verification - would check device authenticity
@@ -740,7 +740,7 @@ impl HardwareWallet for LedgerDevice {
     
     async fn get_auth_credentials(&self) -> Result<HardwareWalletCredentials, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         Ok(HardwareWalletCredentials {
@@ -807,39 +807,39 @@ impl HardwareWallet for TrezorDevice {
     
     async fn get_master_xpub(&self) -> Result<ExtendedPublicKey, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
-        Err(GdkError::Auth("Mock implementation - not yet implemented".to_string()))
+        Err(GdkError::auth_simple("Mock implementation - not yet implemented".to_string()))
     }
     
     async fn get_xpub(&self, _derivation_path: &DerivationPath) -> Result<ExtendedPublicKey, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
-        Err(GdkError::Auth("Mock implementation - not yet implemented".to_string()))
+        Err(GdkError::auth_simple("Mock implementation - not yet implemented".to_string()))
     }
     
     async fn get_address(&self, _derivation_path: &DerivationPath) -> Result<Address, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
-        Err(GdkError::Auth("Mock implementation - not yet implemented".to_string()))
+        Err(GdkError::auth_simple("Mock implementation - not yet implemented".to_string()))
     }
     
     async fn display_address(&self, _derivation_path: &DerivationPath) -> Result<bool, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         Ok(true)
     }
     
     async fn sign_psbt(&self, psbt: &PartiallySignedTransaction) -> Result<PartiallySignedTransaction, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         // Mock implementation for Trezor PSBT signing
-        let mut signed_psbt = psbt.clone();
+        let signed_psbt = psbt.clone();
         
         log::info!("Trezor: Signing PSBT with {} inputs", signed_psbt.inputs.len());
         
@@ -851,17 +851,17 @@ impl HardwareWallet for TrezorDevice {
     
     async fn sign_psbt_inputs(&self, psbt: &PartiallySignedTransaction, input_indices: &[usize]) -> Result<PartiallySignedTransaction, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
-        let mut signed_psbt = psbt.clone();
+        let signed_psbt = psbt.clone();
         
         log::info!("Trezor: Signing PSBT inputs {:?}", input_indices);
         
         // Validate input indices
         for &index in input_indices {
             if index >= signed_psbt.inputs.len() {
-                return Err(GdkError::InvalidInput(format!("Input index {} out of bounds", index)));
+                return Err(GdkError::invalid_input_simple(format!("Input index {} out of bounds", index)));
             }
         }
         
@@ -873,7 +873,7 @@ impl HardwareWallet for TrezorDevice {
     
     async fn display_transaction(&self, psbt: &PartiallySignedTransaction) -> Result<bool, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         log::info!("Trezor: Displaying transaction on device for confirmation");
@@ -886,7 +886,7 @@ impl HardwareWallet for TrezorDevice {
     
     async fn get_signing_capabilities(&self, psbt: &PartiallySignedTransaction) -> Result<HardwareWalletSigningCapabilities, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         let mut signable_inputs = Vec::new();
@@ -921,7 +921,7 @@ impl HardwareWallet for TrezorDevice {
     
     async fn sign_message(&self, _derivation_path: &DerivationPath, _message: &[u8]) -> Result<Vec<u8>, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         // Mock message signing
         Ok(vec![0u8; 64]) // Mock signature
@@ -929,14 +929,14 @@ impl HardwareWallet for TrezorDevice {
     
     async fn verify_device(&self) -> Result<bool, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         Ok(true)
     }
     
     async fn get_auth_credentials(&self) -> Result<HardwareWalletCredentials, GdkError> {
         if !self.connected {
-            return Err(GdkError::Auth("Device not connected".to_string()));
+            return Err(GdkError::auth_simple("Device not connected".to_string()));
         }
         
         Ok(HardwareWalletCredentials {
@@ -1005,38 +1005,38 @@ macro_rules! impl_mock_device {
             
             async fn get_master_xpub(&self) -> Result<ExtendedPublicKey, GdkError> {
                 if !self.connected {
-                    return Err(GdkError::Auth("Device not connected".to_string()));
+                    return Err(GdkError::auth_simple("Device not connected".to_string()));
                 }
-                Err(GdkError::Auth("Mock implementation - not yet implemented".to_string()))
+                Err(GdkError::auth_simple("Mock implementation - not yet implemented".to_string()))
             }
             
             async fn get_xpub(&self, _derivation_path: &DerivationPath) -> Result<ExtendedPublicKey, GdkError> {
                 if !self.connected {
-                    return Err(GdkError::Auth("Device not connected".to_string()));
+                    return Err(GdkError::auth_simple("Device not connected".to_string()));
                 }
-                Err(GdkError::Auth("Mock implementation - not yet implemented".to_string()))
+                Err(GdkError::auth_simple("Mock implementation - not yet implemented".to_string()))
             }
             
             async fn get_address(&self, _derivation_path: &DerivationPath) -> Result<Address, GdkError> {
                 if !self.connected {
-                    return Err(GdkError::Auth("Device not connected".to_string()));
+                    return Err(GdkError::auth_simple("Device not connected".to_string()));
                 }
-                Err(GdkError::Auth("Mock implementation - not yet implemented".to_string()))
+                Err(GdkError::auth_simple("Mock implementation - not yet implemented".to_string()))
             }
             
             async fn display_address(&self, _derivation_path: &DerivationPath) -> Result<bool, GdkError> {
                 if !self.connected {
-                    return Err(GdkError::Auth("Device not connected".to_string()));
+                    return Err(GdkError::auth_simple("Device not connected".to_string()));
                 }
                 Ok(true)
             }
             
             async fn sign_psbt(&self, psbt: &PartiallySignedTransaction) -> Result<PartiallySignedTransaction, GdkError> {
                 if !self.connected {
-                    return Err(GdkError::Auth("Device not connected".to_string()));
+                    return Err(GdkError::auth_simple("Device not connected".to_string()));
                 }
                 
-                let mut signed_psbt = psbt.clone();
+                let signed_psbt = psbt.clone();
                 log::info!("{}: Signing PSBT with {} inputs", stringify!($device_name), signed_psbt.inputs.len());
                 
                 // Mock signing delay
@@ -1047,17 +1047,17 @@ macro_rules! impl_mock_device {
             
             async fn sign_psbt_inputs(&self, psbt: &PartiallySignedTransaction, input_indices: &[usize]) -> Result<PartiallySignedTransaction, GdkError> {
                 if !self.connected {
-                    return Err(GdkError::Auth("Device not connected".to_string()));
+                    return Err(GdkError::auth_simple("Device not connected".to_string()));
                 }
                 
-                let mut signed_psbt = psbt.clone();
+                let signed_psbt = psbt.clone();
                 
                 log::info!("{}: Signing PSBT inputs {:?}", stringify!($device_name), input_indices);
                 
                 // Validate input indices
                 for &index in input_indices {
                     if index >= signed_psbt.inputs.len() {
-                        return Err(GdkError::InvalidInput(format!("Input index {} out of bounds", index)));
+                        return Err(GdkError::invalid_input_simple(format!("Input index {} out of bounds", index)));
                     }
                 }
                 
@@ -1069,7 +1069,7 @@ macro_rules! impl_mock_device {
             
             async fn display_transaction(&self, _psbt: &PartiallySignedTransaction) -> Result<bool, GdkError> {
                 if !self.connected {
-                    return Err(GdkError::Auth("Device not connected".to_string()));
+                    return Err(GdkError::auth_simple("Device not connected".to_string()));
                 }
                 
                 log::info!("{}: Displaying transaction on device for confirmation", stringify!($device_name));
@@ -1082,7 +1082,7 @@ macro_rules! impl_mock_device {
             
             async fn get_signing_capabilities(&self, psbt: &PartiallySignedTransaction) -> Result<HardwareWalletSigningCapabilities, GdkError> {
                 if !self.connected {
-                    return Err(GdkError::Auth("Device not connected".to_string()));
+                    return Err(GdkError::auth_simple("Device not connected".to_string()));
                 }
                 
                 let mut signable_inputs = Vec::new();
@@ -1113,25 +1113,25 @@ macro_rules! impl_mock_device {
             
             async fn sign_message(&self, _derivation_path: &DerivationPath, _message: &[u8]) -> Result<Vec<u8>, GdkError> {
                 if !self.connected {
-                    return Err(GdkError::Auth("Device not connected".to_string()));
+                    return Err(GdkError::auth_simple("Device not connected".to_string()));
                 }
                 if $message_signing {
                     Ok(vec![0u8; 64])
                 } else {
-                    Err(GdkError::Auth("Message signing not supported on this device".to_string()))
+                    Err(GdkError::auth_simple("Message signing not supported on this device".to_string()))
                 }
             }
             
             async fn verify_device(&self) -> Result<bool, GdkError> {
                 if !self.connected {
-                    return Err(GdkError::Auth("Device not connected".to_string()));
+                    return Err(GdkError::auth_simple("Device not connected".to_string()));
                 }
                 Ok(true)
             }
             
             async fn get_auth_credentials(&self) -> Result<HardwareWalletCredentials, GdkError> {
                 if !self.connected {
-                    return Err(GdkError::Auth("Device not connected".to_string()));
+                    return Err(GdkError::auth_simple("Device not connected".to_string()));
                 }
                 
                 Ok(HardwareWalletCredentials {
@@ -1223,7 +1223,7 @@ impl HardwareWalletSigningCoordinator {
         // Validate that all devices are connected
         for device_id in &device_ids {
             if self.manager.get_device(device_id).is_none() {
-                return Err(GdkError::HardwareWallet(format!(
+                return Err(GdkError::hardware_wallet_simple(format!(
                     "Device not connected: {}", device_id
                 )));
             }
@@ -1256,10 +1256,10 @@ impl HardwareWalletSigningCoordinator {
         let session = {
             let mut active_signings = self.active_signings.lock().unwrap();
             let session = active_signings.get_mut(session_id)
-                .ok_or_else(|| GdkError::HardwareWallet("Signing session not found".to_string()))?;
+                .ok_or_else(|| GdkError::hardware_wallet_simple("Signing session not found".to_string()))?;
             
             if session.status != SigningStatus::Pending {
-                return Err(GdkError::HardwareWallet("Signing session already started".to_string()));
+                return Err(GdkError::hardware_wallet_simple("Signing session already started".to_string()));
             }
             
             session.status = SigningStatus::InProgress;
@@ -1404,7 +1404,7 @@ impl HardwareWalletSigningCoordinator {
         {
             let devices = manager.devices.lock().unwrap();
             if !devices.contains_key(device_id) {
-                return Err(GdkError::HardwareWallet("Device not found".to_string()));
+                return Err(GdkError::hardware_wallet_simple("Device not found".to_string()));
             }
         }
         
@@ -1414,7 +1414,7 @@ impl HardwareWalletSigningCoordinator {
         let confirmed = true; // Mock confirmation for now
         
         if !confirmed {
-            return Err(GdkError::HardwareWallet("User rejected transaction on device".to_string()));
+            return Err(GdkError::hardware_wallet_simple("User rejected transaction on device".to_string()));
         }
         
         // Sign the PSBT
@@ -1437,7 +1437,7 @@ impl HardwareWalletSigningCoordinator {
             session.status = SigningStatus::Failed("Cancelled by user".to_string());
             Ok(())
         } else {
-            Err(GdkError::HardwareWallet("Signing session not found".to_string()))
+            Err(GdkError::hardware_wallet_simple("Signing session not found".to_string()))
         }
     }
     
@@ -1500,19 +1500,19 @@ impl HardwareWalletErrorRecovery {
             tokio::time::sleep(Duration::from_millis(500)).await;
             // In real implementation, would check device status
         }
-        Err(GdkError::Auth("Device remained busy for too long".to_string()))
+        Err(GdkError::auth_simple("Device remained busy for too long".to_string()))
     }
     
     /// Provide user guidance for common errors
     pub fn get_error_guidance(error: &GdkError) -> String {
         match error {
-            GdkError::Auth(msg) if msg.contains("not connected") => {
+            GdkError::Auth { message, .. } if message.contains("not connected") => {
                 "Please ensure your hardware wallet is connected and unlocked.".to_string()
             }
-            GdkError::Auth(msg) if msg.contains("locked out") => {
+            GdkError::Auth { message, .. } if message.contains("locked out") => {
                 "Your hardware wallet is locked. Please unlock it and try again.".to_string()
             }
-            GdkError::Auth(msg) if msg.contains("busy") => {
+            GdkError::Auth { message, .. } if message.contains("busy") => {
                 "Your hardware wallet is busy. Please wait for the current operation to complete.".to_string()
             }
             _ => "Please check your hardware wallet connection and try again.".to_string()
@@ -1615,11 +1615,11 @@ mod tests {
     
     #[test]
     fn test_error_recovery_guidance() {
-        let not_connected_error = GdkError::Auth("Device not connected".to_string());
+        let not_connected_error = GdkError::auth_simple("Device not connected".to_string());
         let guidance = HardwareWalletErrorRecovery::get_error_guidance(&not_connected_error);
         assert!(guidance.contains("connected and unlocked"));
         
-        let busy_error = GdkError::Auth("Device is busy".to_string());
+        let busy_error = GdkError::auth_simple("Device is busy".to_string());
         let guidance = HardwareWalletErrorRecovery::get_error_guidance(&busy_error);
         assert!(guidance.contains("busy"));
     }
@@ -1941,13 +1941,13 @@ impl HardwareWalletSigningError {
     /// Convert a GdkError to a HardwareWalletSigningError with guidance
     pub fn from_gdk_error(error: GdkError, device_id: String) -> Self {
         let error_type = match &error {
-            GdkError::Auth(msg) if msg.contains("not connected") => SigningErrorType::DeviceNotConnected,
-            GdkError::Auth(msg) if msg.contains("rejected") => SigningErrorType::UserRejected,
-            GdkError::HardwareWallet(msg) if msg.contains("timeout") => SigningErrorType::DeviceTimeout,
-            GdkError::HardwareWallet(msg) if msg.contains("unsupported") => SigningErrorType::UnsupportedTransaction,
-            GdkError::InvalidInput(_) => SigningErrorType::InvalidPsbt,
-            GdkError::HardwareWallet(_) => SigningErrorType::DeviceError,
-            GdkError::Network(_) => SigningErrorType::CommunicationError,
+            GdkError::Auth { message, .. } if message.contains("not connected") => SigningErrorType::DeviceNotConnected,
+            GdkError::Auth { message, .. } if message.contains("rejected") => SigningErrorType::UserRejected,
+            GdkError::HardwareWallet { message, .. } if message.contains("timeout") => SigningErrorType::DeviceTimeout,
+            GdkError::HardwareWallet { message, .. } if message.contains("unsupported") => SigningErrorType::UnsupportedTransaction,
+            GdkError::InvalidInput { .. } => SigningErrorType::InvalidPsbt,
+            GdkError::HardwareWallet { .. } => SigningErrorType::DeviceError,
+            GdkError::Network { .. } => SigningErrorType::CommunicationError,
             _ => SigningErrorType::UnknownError,
         };
         
@@ -2218,7 +2218,7 @@ mod signing_tests {
     
     #[test]
     fn test_signing_error_from_gdk_error() {
-        let gdk_error = GdkError::Auth("Device not connected".to_string());
+        let gdk_error = GdkError::auth_simple("Device not connected".to_string());
         let signing_error = HardwareWalletSigningError::from_gdk_error(gdk_error, "test_device".to_string());
         
         assert_eq!(signing_error.error_type, SigningErrorType::DeviceNotConnected);

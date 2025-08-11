@@ -375,7 +375,7 @@
   - Create troubleshooting guide with common issues and solutions
   - _Requirements: 12.3, 12.5_
 
-- [ ] 14. Implement Cargo feature configuration
+- [x] 14. Implement Cargo feature configuration
   - Create optional feature flags for hardware wallet support
   - Add Tor integration as optional feature
   - Implement Liquid Network support as optional feature
@@ -383,7 +383,7 @@
   - Add feature documentation and usage guidelines
   - _Requirements: 11.1, 11.2, 11.3, 11.4, 11.5_
 
-- [ ] 14.1 Configure optional Cargo features
+- [x] 14.1 Configure optional Cargo features
   - Set up hardware-wallets feature flag with conditional compilation
   - Add tor-support feature flag with Tor-specific dependencies
   - Create liquid-network feature flag for Liquid-specific functionality

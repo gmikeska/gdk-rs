@@ -1,6 +1,5 @@
 use gdk_rs::transaction_builder::*;
 use gdk_rs::primitives::address::{Network, Address};
-use gdk_rs::primitives::script::Script;
 use gdk_rs::protocol::Addressee;
 use std::str::FromStr;
 

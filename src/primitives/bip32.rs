@@ -141,7 +141,7 @@ impl FromStr for DerivationPath {
         }
 
         if !s.starts_with("m/") {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Derivation path must start with 'm' or 'm/'".to_string(),
             ));
         }
@@ -154,7 +154,7 @@ impl FromStr for DerivationPath {
         let mut path = Vec::new();
         for component in path_str.split('/') {
             if component.is_empty() {
-                return Err(GdkError::InvalidInput(
+                return Err(GdkError::invalid_input_simple(
                     "Empty path component".to_string(),
                 ));
             }
@@ -166,11 +166,11 @@ impl FromStr for DerivationPath {
             };
 
             let index: u32 = index_str.parse().map_err(|_| {
-                GdkError::InvalidInput(format!("Invalid path component: {}", component))
+                GdkError::invalid_input_simple(format!("Invalid path component: {}", component))
             })?;
 
             if index >= BIP32_HARDENED_KEY_LIMIT {
-                return Err(GdkError::InvalidInput(format!(
+                return Err(GdkError::invalid_input_simple(format!(
                     "Path component index too large: {}",
                     index
                 )));
@@ -228,7 +228,7 @@ impl ExtendedPrivateKey {
         let (key_bytes, chain_code_bytes) = result.split_at(32);
 
         let private_key = SecretKey::from_slice(key_bytes)
-            .map_err(|e| GdkError::InvalidInput(format!("Invalid private key from seed: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Invalid private key from seed: {}", e)))?;
 
         let mut chain_code = [0u8; 32];
         chain_code.copy_from_slice(chain_code_bytes);
@@ -266,10 +266,10 @@ impl ExtendedPrivateKey {
 
         // Use secp256k1 to properly handle scalar addition modulo curve order
         let scalar = SecretKey::from_slice(key_bytes)
-            .map_err(|e| GdkError::InvalidInput(format!("Invalid scalar: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Invalid scalar: {}", e)))?;
         
         let child_private_key = self.private_key.add_tweak(&secp256k1::Scalar::from(scalar))
-            .map_err(|e| GdkError::InvalidInput(format!("Invalid child private key: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Invalid child private key: {}", e)))?;
 
         let mut child_chain_code = [0u8; 32];
         child_chain_code.copy_from_slice(chain_code_bytes);
@@ -382,7 +382,7 @@ impl FromStr for ExtendedPrivateKey {
         
         for &ch in s.as_bytes() {
             let digit = ALPHABET.iter().position(|&c| c == ch)
-                .ok_or_else(|| GdkError::InvalidInput("Invalid base58 character".to_string()))?;
+                .ok_or_else(|| GdkError::invalid_input_simple("Invalid base58 character".to_string()))?;
             num = num * 58u32 + num_bigint::BigUint::from(digit);
         }
         
@@ -404,7 +404,7 @@ impl FromStr for ExtendedPrivateKey {
         let data = bytes;
 
         if data.len() != 82 {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 format!("Invalid extended private key length: {} expected 82", data.len()),
             ));
         }
@@ -413,7 +413,7 @@ impl FromStr for ExtendedPrivateKey {
         let (payload, checksum) = data.split_at(78);
         let computed_checksum = Sha256::digest(&Sha256::digest(payload));
         if checksum != &computed_checksum[..4] {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Invalid checksum".to_string(),
             ));
         }
@@ -425,7 +425,7 @@ impl FromStr for ExtendedPrivateKey {
         let network = match version {
             MAINNET_PRIVATE_VERSION => Network::Bitcoin,
             TESTNET_PRIVATE_VERSION => Network::Testnet,
-            _ => return Err(GdkError::InvalidInput("Invalid version bytes".to_string())),
+            _ => return Err(GdkError::invalid_input_simple("Invalid version bytes".to_string())),
         };
 
         // Parse depth
@@ -444,13 +444,13 @@ impl FromStr for ExtendedPrivateKey {
 
         // Parse private key (skip the 0x00 prefix)
         if data[45] != 0x00 {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Invalid private key prefix".to_string(),
             ));
         }
 
         let private_key = SecretKey::from_slice(&data[46..78])
-            .map_err(|e| GdkError::InvalidInput(format!("Invalid private key: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Invalid private key: {}", e)))?;
 
         Ok(ExtendedPrivateKey {
             network,
@@ -484,7 +484,7 @@ impl ExtendedPublicKey {
     /// Derive a child public key (non-hardened only)
     pub fn derive_child(&self, child_number: u32) -> Result<ExtendedPublicKey> {
         if DerivationPath::is_hardened(child_number) {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Cannot derive hardened child from public key".to_string(),
             ));
         }
@@ -501,11 +501,11 @@ impl ExtendedPublicKey {
 
         // Create a secret key from the derived bytes and add it to the public key
         let derived_secret = SecretKey::from_slice(key_bytes)
-            .map_err(|e| GdkError::InvalidInput(format!("Invalid derived key: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Invalid derived key: {}", e)))?;
 
         let derived_public = derived_secret.public_key(&secp);
         let child_public_key = self.public_key.combine(&derived_public)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to combine public keys: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to combine public keys: {}", e)))?;
 
         let mut child_chain_code = [0u8; 32];
         child_chain_code.copy_from_slice(chain_code_bytes);
@@ -591,7 +591,7 @@ impl FromStr for ExtendedPublicKey {
         
         for &ch in s.as_bytes() {
             let digit = ALPHABET.iter().position(|&c| c == ch)
-                .ok_or_else(|| GdkError::InvalidInput("Invalid base58 character".to_string()))?;
+                .ok_or_else(|| GdkError::invalid_input_simple("Invalid base58 character".to_string()))?;
             num = num * 58u32 + num_bigint::BigUint::from(digit);
         }
         
@@ -613,7 +613,7 @@ impl FromStr for ExtendedPublicKey {
         let data = bytes;
 
         if data.len() != 82 {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 format!("Invalid extended public key length: {} expected 82", data.len()),
             ));
         }
@@ -622,7 +622,7 @@ impl FromStr for ExtendedPublicKey {
         let (payload, checksum) = data.split_at(78);
         let computed_checksum = Sha256::digest(&Sha256::digest(payload));
         if checksum != &computed_checksum[..4] {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Invalid checksum".to_string(),
             ));
         }
@@ -634,7 +634,7 @@ impl FromStr for ExtendedPublicKey {
         let network = match version {
             MAINNET_PUBLIC_VERSION => Network::Bitcoin,
             TESTNET_PUBLIC_VERSION => Network::Testnet,
-            _ => return Err(GdkError::InvalidInput("Invalid version bytes".to_string())),
+            _ => return Err(GdkError::invalid_input_simple("Invalid version bytes".to_string())),
         };
 
         // Parse depth
@@ -653,7 +653,7 @@ impl FromStr for ExtendedPublicKey {
 
         // Parse public key
         let public_key = PublicKey::from_slice(&data[45..78])
-            .map_err(|e| GdkError::InvalidInput(format!("Invalid public key: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Invalid public key: {}", e)))?;
 
         Ok(ExtendedPublicKey {
             network,
@@ -908,7 +908,7 @@ mod tests {
         assert!(ExtendedPrivateKey::from_str(&short_key[..short_key.len()-10]).is_err());
         
         // Invalid version
-        let mut invalid_version = "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111";
+        let invalid_version = "1111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111";
         assert!(ExtendedPrivateKey::from_str(invalid_version).is_err());
     }
 

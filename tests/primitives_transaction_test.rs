@@ -44,7 +44,7 @@ fn test_legacy_transaction_encode_decode_roundtrip() {
 #[test]
 fn test_witness_transaction_encode_decode_roundtrip() {
     // A witness transaction
-    let mut tx = Transaction {
+    let tx = Transaction {
         version: 2,
         lock_time: 500000,
         input: vec![TxIn {

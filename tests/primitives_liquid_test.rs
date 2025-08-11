@@ -1,3 +1,5 @@
+#![cfg(feature = "liquid-network")]
+
 use gdk_rs::primitives::liquid::*;
 use gdk_rs::primitives::script::Script;
 use gdk_rs::primitives::transaction::TxIn;

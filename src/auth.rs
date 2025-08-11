@@ -1,4 +1,5 @@
 use crate::error::GdkError;
+#[cfg(feature = "hardware-wallets")]
 use crate::hw::{HardwareWalletManager, HardwareWalletCredentials, HardwareWalletInfo};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -59,13 +60,13 @@ impl PinData {
     pub fn decrypt_with_pin(&mut self, pin: &str) -> Result<Vec<u8>, GdkError> {
         // Check if PIN is locked out
         if self.is_locked_out() {
-            return Err(GdkError::Auth("PIN is locked out due to too many failed attempts".to_string()));
+            return Err(GdkError::auth_simple("PIN is locked out due to too many failed attempts".to_string()));
         }
         
         // Validate PIN
         if !self.validate_pin(pin)? {
             self.record_failed_attempt();
-            return Err(GdkError::Auth("Invalid PIN".to_string()));
+            return Err(GdkError::auth_simple("Invalid PIN".to_string()));
         }
         
         // Reset failed attempts on successful validation
@@ -185,6 +186,7 @@ pub struct LoginCredentials {
     /// Hardware wallet device ID
     pub hardware_device_id: Option<String>,
     /// Hardware wallet credentials
+    #[cfg(feature = "hardware-wallets")]
     pub hardware_credentials: Option<HardwareWalletCredentials>,
 }
 
@@ -201,6 +203,7 @@ impl LoginCredentials {
             core_descriptors: None,
             xpub: None,
             hardware_device_id: None,
+            #[cfg(feature = "hardware-wallets")]
             hardware_credentials: None,
         }
     }
@@ -217,6 +220,7 @@ impl LoginCredentials {
             core_descriptors: None,
             xpub: None,
             hardware_device_id: None,
+            #[cfg(feature = "hardware-wallets")]
             hardware_credentials: None,
         }
     }
@@ -233,6 +237,7 @@ impl LoginCredentials {
             core_descriptors: None,
             xpub: None,
             hardware_device_id: None,
+            #[cfg(feature = "hardware-wallets")]
             hardware_credentials: None,
         }
     }
@@ -249,6 +254,7 @@ impl LoginCredentials {
             core_descriptors: Some(descriptors),
             xpub: None,
             hardware_device_id: None,
+            #[cfg(feature = "hardware-wallets")]
             hardware_credentials: None,
         }
     }
@@ -265,11 +271,13 @@ impl LoginCredentials {
             core_descriptors: None,
             xpub: Some(xpub),
             hardware_device_id: None,
+            #[cfg(feature = "hardware-wallets")]
             hardware_credentials: None,
         }
     }
     
     /// Create credentials for hardware wallet authentication
+    #[cfg(feature = "hardware-wallets")]
     pub fn from_hardware_wallet(device_id: String, credentials: HardwareWalletCredentials) -> Self {
         Self {
             mnemonic: None,
@@ -281,6 +289,7 @@ impl LoginCredentials {
             core_descriptors: None,
             xpub: None,
             hardware_device_id: Some(device_id),
+            #[cfg(feature = "hardware-wallets")]
             hardware_credentials: Some(credentials),
         }
     }
@@ -304,6 +313,7 @@ pub struct AuthManager {
     /// Storage for PIN data by wallet ID
     pin_storage: HashMap<String, PinData>,
     /// Hardware wallet manager
+    #[cfg(feature = "hardware-wallets")]
     hw_manager: HardwareWalletManager,
 }
 
@@ -311,6 +321,7 @@ impl AuthManager {
     pub fn new() -> Self {
         Self {
             pin_storage: HashMap::new(),
+            #[cfg(feature = "hardware-wallets")]
             hw_manager: HardwareWalletManager::new(),
         }
     }
@@ -323,7 +334,10 @@ impl AuthManager {
             AuthMethod::WatchOnlyUser => self.register_watch_only_user(credentials),
             AuthMethod::WatchOnlyDescriptor => self.register_descriptor_user(credentials),
             AuthMethod::WatchOnlyXpub => self.register_xpub_user(credentials),
+            #[cfg(feature = "hardware-wallets")]
             AuthMethod::HardwareWallet => self.register_hardware_wallet_user(credentials).await,
+            #[cfg(not(feature = "hardware-wallets"))]
+            AuthMethod::HardwareWallet => Err(GdkError::invalid_input_simple("Hardware wallet support not enabled".to_string())),
         }
     }
     
@@ -335,7 +349,10 @@ impl AuthManager {
             AuthMethod::WatchOnlyUser => self.login_watch_only_user(credentials),
             AuthMethod::WatchOnlyDescriptor => self.login_descriptor_user(credentials),
             AuthMethod::WatchOnlyXpub => self.login_xpub_user(credentials),
+            #[cfg(feature = "hardware-wallets")]
             AuthMethod::HardwareWallet => self.login_hardware_wallet_user(credentials).await,
+            #[cfg(not(feature = "hardware-wallets"))]
+            AuthMethod::HardwareWallet => Err(GdkError::invalid_input_simple("Hardware wallet support not enabled".to_string())),
         }
     }
     
@@ -354,7 +371,7 @@ impl AuthManager {
         } else if credentials.xpub.is_some() {
             Ok(AuthMethod::WatchOnlyXpub)
         } else {
-            Err(GdkError::InvalidInput("Invalid or incomplete credentials".to_string()))
+            Err(GdkError::invalid_input_simple("Invalid or incomplete credentials".to_string()))
         }
     }
     
@@ -364,7 +381,7 @@ impl AuthManager {
         
         // Validate mnemonic
         if !crate::utils::validate_mnemonic(mnemonic)? {
-            return Err(GdkError::Auth("Invalid mnemonic".to_string()));
+            return Err(GdkError::auth_simple("Invalid mnemonic".to_string()));
         }
         
         // Generate wallet hash ID from mnemonic
@@ -385,7 +402,7 @@ impl AuthManager {
         
         // Validate PIN format
         if !is_valid_pin(pin) {
-            return Err(GdkError::Auth("Invalid PIN format".to_string()));
+            return Err(GdkError::auth_simple("Invalid PIN format".to_string()));
         }
         
         // Generate wallet hash ID from PIN data
@@ -409,7 +426,7 @@ impl AuthManager {
         
         // Validate username and password
         if username.is_empty() || password.is_empty() {
-            return Err(GdkError::Auth("Username and password cannot be empty".to_string()));
+            return Err(GdkError::auth_simple("Username and password cannot be empty".to_string()));
         }
         
         // Generate wallet hash ID from username
@@ -429,12 +446,12 @@ impl AuthManager {
         
         // Validate descriptors
         if descriptors.is_empty() {
-            return Err(GdkError::Auth("At least one descriptor is required".to_string()));
+            return Err(GdkError::auth_simple("At least one descriptor is required".to_string()));
         }
         
         for descriptor in descriptors {
             if !is_valid_descriptor(descriptor) {
-                return Err(GdkError::Auth(format!("Invalid descriptor: {}", descriptor)));
+                return Err(GdkError::auth_simple(format!("Invalid descriptor: {}", descriptor)));
             }
         }
         
@@ -455,7 +472,7 @@ impl AuthManager {
         
         // Validate extended public key
         if !is_valid_xpub(xpub) {
-            return Err(GdkError::Auth("Invalid extended public key".to_string()));
+            return Err(GdkError::auth_simple("Invalid extended public key".to_string()));
         }
         
         // Generate wallet hash ID from xpub
@@ -516,6 +533,7 @@ impl AuthManager {
     }
     
     /// Register hardware wallet user
+    #[cfg(feature = "hardware-wallets")]
     async fn register_hardware_wallet_user(&mut self, credentials: &LoginCredentials) -> Result<RegisterLoginResult, GdkError> {
         let device_id = credentials.hardware_device_id.as_ref().unwrap();
         
@@ -528,7 +546,7 @@ impl AuthManager {
         // Verify device authenticity
         let is_authentic = self.hw_manager.verify_device_authenticity(device_id).await?;
         if !is_authentic {
-            return Err(GdkError::Auth("Hardware wallet device authentication failed".to_string()));
+            return Err(GdkError::auth_simple("Hardware wallet device authentication failed".to_string()));
         }
         
         // Generate wallet hash ID from device info
@@ -546,6 +564,7 @@ impl AuthManager {
     }
     
     /// Login hardware wallet user
+    #[cfg(feature = "hardware-wallets")]
     async fn login_hardware_wallet_user(&mut self, credentials: &LoginCredentials) -> Result<RegisterLoginResult, GdkError> {
         let device_id = credentials.hardware_device_id.as_ref().unwrap();
         
@@ -571,6 +590,7 @@ impl AuthManager {
     }
     
     /// Discover and connect to hardware wallet
+    #[cfg(feature = "hardware-wallets")]
     async fn discover_and_connect_hardware_wallet(&mut self, device_id: &str) -> Result<HardwareWalletInfo, GdkError> {
         // Discover available devices
         let devices = self.hw_manager.discover_devices().await?;
@@ -578,7 +598,7 @@ impl AuthManager {
         // Find the requested device
         let device_info = devices.into_iter()
             .find(|d| d.device_id == device_id)
-            .ok_or_else(|| GdkError::Auth(format!("Hardware wallet device not found: {}", device_id)))?;
+            .ok_or_else(|| GdkError::auth_simple(format!("Hardware wallet device not found: {}", device_id)))?;
         
         // Connect to the device
         let _device = self.hw_manager.connect_device(device_id).await?;
@@ -587,27 +607,32 @@ impl AuthManager {
     }
     
     /// Get hardware wallet manager
+    #[cfg(feature = "hardware-wallets")]
     pub fn get_hardware_wallet_manager(&self) -> &HardwareWalletManager {
         &self.hw_manager
     }
     
     /// Get hardware wallet manager (mutable)
+    #[cfg(feature = "hardware-wallets")]
     pub fn get_hardware_wallet_manager_mut(&mut self) -> &mut HardwareWalletManager {
         &mut self.hw_manager
     }
     
     /// List available hardware wallet devices
+    #[cfg(feature = "hardware-wallets")]
     pub async fn list_hardware_wallet_devices(&self) -> Result<Vec<HardwareWalletInfo>, GdkError> {
         self.hw_manager.discover_devices().await
     }
     
     /// Connect to a specific hardware wallet device
+    #[cfg(feature = "hardware-wallets")]
     pub async fn connect_hardware_wallet(&mut self, device_id: &str) -> Result<(), GdkError> {
         self.hw_manager.connect_device(device_id).await?;
         Ok(())
     }
     
     /// Disconnect from a hardware wallet device
+    #[cfg(feature = "hardware-wallets")]
     pub async fn disconnect_hardware_wallet(&mut self, device_id: &str) -> Result<(), GdkError> {
         self.hw_manager.disconnect_device(device_id).await
     }
@@ -676,7 +701,7 @@ fn encrypt_data(data: &[u8], key: &[u8]) -> Result<Vec<u8>, GdkError> {
     let nonce = Nonce::from_slice(&nonce_bytes);
     
     let ciphertext = cipher.encrypt(nonce, data)
-        .map_err(|e| GdkError::Auth(format!("Encryption failed: {}", e)))?;
+        .map_err(|e| GdkError::auth_simple(format!("Encryption failed: {}", e)))?;
     
     // Prepend nonce to ciphertext
     let mut result = nonce_bytes;
@@ -689,7 +714,7 @@ fn decrypt_data(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>, GdkError> 
     use aes_gcm::{Aes256Gcm, Key, Nonce, aead::{Aead, KeyInit}};
     
     if encrypted_data.len() < 12 {
-        return Err(GdkError::Auth("Invalid encrypted data length".to_string()));
+        return Err(GdkError::auth_simple("Invalid encrypted data length".to_string()));
     }
     
     let cipher = Aes256Gcm::new(Key::<Aes256Gcm>::from_slice(key));
@@ -697,7 +722,7 @@ fn decrypt_data(encrypted_data: &[u8], key: &[u8]) -> Result<Vec<u8>, GdkError> 
     let ciphertext = &encrypted_data[12..];
     
     cipher.decrypt(nonce, ciphertext)
-        .map_err(|e| GdkError::Auth(format!("Decryption failed: {}", e)))
+        .map_err(|e| GdkError::auth_simple(format!("Decryption failed: {}", e)))
 }
 
 /// Constant-time comparison to prevent timing attacks

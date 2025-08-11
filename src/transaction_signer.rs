@@ -168,7 +168,7 @@ impl TransactionSigner {
         signing_info: &[InputSigningInfo],
     ) -> Result<SigningResult> {
         if transaction.input.len() != signing_info.len() {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Number of inputs must match signing info".to_string(),
             ));
         }
@@ -294,7 +294,7 @@ impl TransactionSigner {
         let redeem_script = info
             .redeem_script
             .as_ref()
-            .ok_or_else(|| GdkError::InvalidInput("P2SH requires redeem script".to_string()))?;
+            .ok_or_else(|| GdkError::invalid_input_simple("P2SH requires redeem script".to_string()))?;
 
         // Create signature hash using the redeem script
         let sighash = self.signature_hash_legacy(
@@ -340,7 +340,7 @@ impl TransactionSigner {
         let witness_script = info
             .witness_script
             .as_ref()
-            .ok_or_else(|| GdkError::InvalidInput("P2WSH requires witness script".to_string()))?;
+            .ok_or_else(|| GdkError::invalid_input_simple("P2WSH requires witness script".to_string()))?;
 
         // Create signature hash for SegWit using witness script
         let sighash = self.signature_hash_segwit_v0(
@@ -422,7 +422,7 @@ impl TransactionSigner {
         let witness_script = info
             .witness_script
             .as_ref()
-            .ok_or_else(|| GdkError::InvalidInput("P2SH-P2WSH requires witness script".to_string()))?;
+            .ok_or_else(|| GdkError::invalid_input_simple("P2SH-P2WSH requires witness script".to_string()))?;
 
         // Create signature hash for SegWit using witness script
         let sighash = self.signature_hash_segwit_v0(
@@ -470,7 +470,7 @@ impl TransactionSigner {
         sighash_type: SigHashType,
     ) -> Result<Transaction> {
         if multisig_info.signing_keys.len() < multisig_info.required_sigs {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Not enough signing keys for multisig".to_string(),
             ));
         }
@@ -551,7 +551,7 @@ impl TransactionSigner {
             SigHashType::Single => {
                 // Keep only the output with the same index
                 if input_index >= tx_copy.output.len() {
-                    return Err(GdkError::InvalidInput("SIGHASH_SINGLE: input index out of range".to_string()));
+                    return Err(GdkError::invalid_input_simple("SIGHASH_SINGLE: input index out of range".to_string()));
                 }
                 let output = tx_copy.output[input_index].clone();
                 tx_copy.output = vec![output];
@@ -669,7 +669,7 @@ impl TransactionSigner {
     /// Sign a hash with a private key
     fn sign_hash(&self, hash: &Hash256, private_key: &SecretKey) -> Result<Signature> {
         let message = Message::from_digest_slice(hash)
-            .map_err(|e| GdkError::InvalidInput(format!("Invalid message: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Invalid message: {}", e)))?;
 
         Ok(self.secp.sign_ecdsa(&message, private_key))
     }
@@ -682,7 +682,7 @@ impl TransactionSigner {
         public_key: &PublicKey,
     ) -> Result<bool> {
         let message = Message::from_digest_slice(hash)
-            .map_err(|e| GdkError::InvalidInput(format!("Invalid message: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Invalid message: {}", e)))?;
 
         Ok(self.secp.verify_ecdsa(&message, signature, public_key).is_ok())
     }
@@ -694,7 +694,7 @@ impl TransactionSigner {
         utxos: &[UtxoInfo],
     ) -> Result<bool> {
         if transaction.input.len() != utxos.len() {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Number of inputs must match UTXOs".to_string(),
             ));
         }
@@ -790,7 +790,7 @@ mod tests {
     #[test]
     fn test_signing_key_creation() {
         let secp = Secp256k1::new();
-        let mut rng = thread_rng();
+        let rng = thread_rng();
         let private_key = SecretKey::from_slice(&[1u8; 32]).unwrap();
         let signing_key = SigningKey::new(private_key);
         

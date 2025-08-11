@@ -1,3 +1,5 @@
+#![cfg(feature = "hardware-wallets")]
+
 use gdk_rs::*;
 use gdk_rs::hw::*;
 use std::time::Duration;
@@ -279,19 +281,19 @@ async fn test_hardware_wallet_error_recovery() {
 
 #[tokio::test]
 async fn test_error_guidance() {
-    let not_connected_error = GdkError::Auth("Device not connected".to_string());
+    let not_connected_error = GdkError::auth_simple("Device not connected".to_string());
     let guidance = HardwareWalletErrorRecovery::get_error_guidance(&not_connected_error);
     assert!(guidance.contains("ensure your hardware wallet is connected"));
     
-    let locked_error = GdkError::Auth("Device locked out".to_string());
+    let locked_error = GdkError::auth_simple("Device locked out".to_string());
     let guidance = HardwareWalletErrorRecovery::get_error_guidance(&locked_error);
     assert!(guidance.contains("locked"));
     
-    let busy_error = GdkError::Auth("Device is busy".to_string());
+    let busy_error = GdkError::auth_simple("Device is busy".to_string());
     let guidance = HardwareWalletErrorRecovery::get_error_guidance(&busy_error);
     assert!(guidance.contains("busy"));
     
-    let generic_error = GdkError::Network("Connection failed".to_string());
+    let generic_error = GdkError::network_simple("Connection failed".to_string());
     let guidance = HardwareWalletErrorRecovery::get_error_guidance(&generic_error);
     assert!(guidance.contains("check your hardware wallet connection"));
 }
@@ -883,14 +885,14 @@ async fn test_hardware_wallet_signing_error_from_gdk_error() {
     
     // Test conversion from different GdkError types
     let test_cases = vec![
-        (GdkError::Auth("Device not connected".to_string()), SigningErrorType::DeviceNotConnected),
-        (GdkError::Auth("User rejected transaction".to_string()), SigningErrorType::UserRejected),
-        (GdkError::HardwareWallet("Device timeout".to_string()), SigningErrorType::DeviceTimeout),
-        (GdkError::HardwareWallet("Unsupported transaction".to_string()), SigningErrorType::UnsupportedTransaction),
-        (GdkError::InvalidInput("Invalid PSBT".to_string()), SigningErrorType::InvalidPsbt),
-        (GdkError::HardwareWallet("Device error".to_string()), SigningErrorType::DeviceError),
-        (GdkError::Network("Connection failed".to_string()), SigningErrorType::CommunicationError),
-        (GdkError::Unknown, SigningErrorType::UnknownError),
+        (GdkError::auth_simple("Device not connected".to_string()), SigningErrorType::DeviceNotConnected),
+        (GdkError::auth_simple("User rejected transaction".to_string()), SigningErrorType::UserRejected),
+        (GdkError::hardware_wallet_simple("Device timeout".to_string()), SigningErrorType::DeviceTimeout),
+        (GdkError::hardware_wallet_simple("Unsupported transaction".to_string()), SigningErrorType::UnsupportedTransaction),
+        (GdkError::invalid_input_simple("Invalid PSBT".to_string()), SigningErrorType::InvalidPsbt),
+        (GdkError::hardware_wallet_simple("Device error".to_string()), SigningErrorType::DeviceError),
+        (GdkError::network_simple("Connection failed".to_string()), SigningErrorType::CommunicationError),
+        (GdkError::unknown(GdkErrorCode::Unknown, "Unknown error"), SigningErrorType::UnknownError),
     ];
     
     for (gdk_error, expected_error_type) in test_cases {

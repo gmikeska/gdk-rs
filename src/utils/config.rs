@@ -56,12 +56,12 @@ impl ConfigManager {
     /// Load configuration from multiple sources
     pub fn load_config<T>(&mut self, config_name: &str) -> Result<T>
     where
-        T: for<'de> Deserialize<'de> + Default + Clone,
+        T: for<'de> Deserialize<'de> + Default + Clone + Serialize,
     {
         // Start with default configuration
         let config = T::default();
         let mut config_value = serde_json::to_value(&config)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to serialize default config: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to serialize default config: {}", e)))?;
 
         // Load from file if it exists
         let config_file_path = self.config_dir.join(format!("{}.json", config_name));
@@ -78,11 +78,11 @@ impl ConfigManager {
 
         // Convert back to typed configuration
         let final_config: T = serde_json::from_value(config_value)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to deserialize config: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to deserialize config: {}", e)))?;
 
         // Cache the loaded configuration
         let config_json = serde_json::to_value(&final_config)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to cache config: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to cache config: {}", e)))?;
         self.loaded_configs.insert(config_name.to_string(), config_json);
 
         Ok(final_config)
@@ -96,15 +96,15 @@ impl ConfigManager {
         // Ensure config directory exists
         if !self.config_dir.exists() {
             fs::create_dir_all(&self.config_dir)
-                .map_err(|e| GdkError::Io(format!("Failed to create config directory: {}", e)))?;
+                .map_err(|e| GdkError::io_simple(format!("Failed to create config directory: {}", e)))?;
         }
 
         let config_file_path = self.config_dir.join(format!("{}.json", config_name));
         let config_json = serde_json::to_string_pretty(config)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to serialize config: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to serialize config: {}", e)))?;
 
         fs::write(&config_file_path, config_json)
-            .map_err(|e| GdkError::Io(format!("Failed to write config file: {}", e)))?;
+            .map_err(|e| GdkError::io_simple(format!("Failed to write config file: {}", e)))?;
 
         log::info!("Configuration '{}' saved to {:?}", config_name, config_file_path);
         Ok(())
@@ -122,7 +122,7 @@ impl ConfigManager {
         
         if config_file_path.exists() {
             fs::remove_file(&config_file_path)
-                .map_err(|e| GdkError::Io(format!("Failed to delete config file: {}", e)))?;
+                .map_err(|e| GdkError::io_simple(format!("Failed to delete config file: {}", e)))?;
             log::info!("Configuration '{}' deleted", config_name);
         }
 
@@ -136,12 +136,12 @@ impl ConfigManager {
         }
 
         let entries = fs::read_dir(&self.config_dir)
-            .map_err(|e| GdkError::Io(format!("Failed to read config directory: {}", e)))?;
+            .map_err(|e| GdkError::io_simple(format!("Failed to read config directory: {}", e)))?;
 
         let mut configs = Vec::new();
         for entry in entries {
             let entry = entry
-                .map_err(|e| GdkError::Io(format!("Failed to read directory entry: {}", e)))?;
+                .map_err(|e| GdkError::io_simple(format!("Failed to read directory entry: {}", e)))?;
             let path = entry.path();
             
             if path.is_file() && path.extension().and_then(|s| s.to_str()) == Some("json") {
@@ -158,10 +158,10 @@ impl ConfigManager {
     /// Load configuration from a file
     fn load_from_file(&self, file_path: &Path) -> Result<serde_json::Value> {
         let content = fs::read_to_string(file_path)
-            .map_err(|e| GdkError::Io(format!("Failed to read config file: {}", e)))?;
+            .map_err(|e| GdkError::io_simple(format!("Failed to read config file: {}", e)))?;
 
         serde_json::from_str(&content)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to parse config file: {}", e)))
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to parse config file: {}", e)))
     }
 
     /// Load configuration from environment variables
@@ -195,13 +195,13 @@ impl ConfigManager {
         overlay: serde_json::Value,
         _source: ConfigSource,
     ) -> Result<()> {
-        match (base, overlay) {
-            (serde_json::Value::Object(base_map), serde_json::Value::Object(overlay_map)) => {
+        match (base, &overlay) {
+            (serde_json::Value::Object(ref mut base_map), serde_json::Value::Object(overlay_map)) => {
                 for (key, value) in overlay_map {
-                    base_map.insert(key, value);
+                    base_map.insert(key.clone(), value.clone());
                 }
             }
-            _ => {
+            (base, _) => {
                 *base = overlay;
             }
         }
@@ -229,7 +229,7 @@ impl EnvironmentConfig {
     /// Load environment-specific configuration
     pub fn load_config<T>(&mut self, config_name: &str) -> Result<T>
     where
-        T: for<'de> Deserialize<'de> + Default + Clone,
+        T: for<'de> Deserialize<'de> + Default + Clone + Serialize,
     {
         // Try to load environment-specific config first
         let env_specific_name = format!("{}_{}", config_name, self.current_environment);
@@ -290,7 +290,7 @@ impl<T: Default> ConfigBuilder<T> {
     /// Add an override value
     pub fn with_override<V: Serialize>(mut self, key: &str, value: V) -> Result<Self> {
         let json_value = serde_json::to_value(value)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to serialize override value: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to serialize override value: {}", e)))?;
         self.overrides.insert(key.to_string(), json_value);
         Ok(self)
     }
@@ -301,7 +301,7 @@ impl<T: Default> ConfigBuilder<T> {
         T: Serialize + for<'de> Deserialize<'de>,
     {
         let mut config_value = serde_json::to_value(&self.config)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to serialize config: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to serialize config: {}", e)))?;
 
         // Apply overrides
         if let serde_json::Value::Object(ref mut config_map) = config_value {
@@ -311,7 +311,7 @@ impl<T: Default> ConfigBuilder<T> {
         }
 
         serde_json::from_value(config_value)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to deserialize final config: {}", e)))
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to deserialize final config: {}", e)))
     }
 }
 
@@ -331,7 +331,7 @@ impl ConfigValidator {
         required_fields: &[&str],
     ) -> Result<Vec<String>> {
         let config_value = serde_json::to_value(config)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to serialize config: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to serialize config: {}", e)))?;
 
         let mut missing_fields = Vec::new();
 
@@ -352,7 +352,7 @@ impl ConfigValidator {
         field_types: &[(&str, &str)],
     ) -> Result<Vec<String>> {
         let config_value = serde_json::to_value(config)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to serialize config: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to serialize config: {}", e)))?;
 
         let mut type_errors = Vec::new();
 
@@ -387,7 +387,7 @@ impl ConfigValidator {
         ranges: &[(&str, f64, f64)],
     ) -> Result<Vec<String>> {
         let config_value = serde_json::to_value(config)
-            .map_err(|e| GdkError::InvalidInput(format!("Failed to serialize config: {}", e)))?;
+            .map_err(|e| GdkError::invalid_input_simple(format!("Failed to serialize config: {}", e)))?;
 
         let mut range_errors = Vec::new();
 

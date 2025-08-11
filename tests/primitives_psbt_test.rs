@@ -1,4 +1,3 @@
-use gdk_rs::*;
 use gdk_rs::primitives::psbt::*;
 use gdk_rs::primitives::transaction::{Transaction, TxIn, TxOut, OutPoint};
 use gdk_rs::primitives::script::Script;

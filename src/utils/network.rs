@@ -83,20 +83,20 @@ impl HttpClient {
         // Configure HTTP proxy
         if let Some(proxy_url) = &config.proxy_url {
             let proxy = Proxy::http(proxy_url)
-                .map_err(|e| GdkError::Network(format!("Invalid HTTP proxy: {}", e)))?;
+                .map_err(|e| GdkError::network_simple(format!("Invalid HTTP proxy: {}", e)))?;
             builder = builder.proxy(proxy);
         }
 
         // Configure SOCKS proxy (for Tor)
         if let Some(socks_url) = &config.socks_proxy_url {
             let proxy = Proxy::all(socks_url)
-                .map_err(|e| GdkError::Network(format!("Invalid SOCKS proxy: {}", e)))?;
+                .map_err(|e| GdkError::network_simple(format!("Invalid SOCKS proxy: {}", e)))?;
             builder = builder.proxy(proxy);
         }
 
         let client = builder
             .build()
-            .map_err(|e| GdkError::Network(format!("Failed to create HTTP client: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("Failed to create HTTP client: {}", e)))?;
 
         Ok(Self { client, config })
     }
@@ -201,7 +201,7 @@ impl HttpClient {
         }
 
         Err(last_error.unwrap_or_else(|| {
-            GdkError::Network("All retry attempts failed".to_string())
+            GdkError::network_simple("All retry attempts failed".to_string())
         }))
     }
 
@@ -217,7 +217,7 @@ impl HttpClient {
             "POST" => self.client.post(url),
             "PUT" => self.client.put(url),
             "DELETE" => self.client.delete(url),
-            _ => return Err(GdkError::Network(format!("Unsupported HTTP method: {}", method))),
+            _ => return Err(GdkError::network_simple(format!("Unsupported HTTP method: {}", method))),
         };
 
         // Add default headers
@@ -233,7 +233,7 @@ impl HttpClient {
         let response = request_builder
             .send()
             .await
-            .map_err(|e| GdkError::Network(format!("HTTP request failed: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("HTTP request failed: {}", e)))?;
 
         Ok(response)
     }
@@ -261,7 +261,7 @@ impl ResponseValidator {
         if response.status().is_success() {
             Ok(())
         } else {
-            Err(GdkError::Network(format!(
+            Err(GdkError::network_simple(format!(
                 "HTTP request failed with status: {}",
                 response.status()
             )))
@@ -275,7 +275,7 @@ impl ResponseValidator {
         response
             .json::<T>()
             .await
-            .map_err(|e| GdkError::Network(format!("Failed to parse JSON response: {}", e)))
+            .map_err(|e| GdkError::network_simple(format!("Failed to parse JSON response: {}", e)))
     }
 
     /// Validate and get response text
@@ -285,7 +285,7 @@ impl ResponseValidator {
         response
             .text()
             .await
-            .map_err(|e| GdkError::Network(format!("Failed to get response text: {}", e)))
+            .map_err(|e| GdkError::network_simple(format!("Failed to get response text: {}", e)))
     }
 
     /// Validate and get response bytes
@@ -296,7 +296,7 @@ impl ResponseValidator {
             .bytes()
             .await
             .map(|b| b.to_vec())
-            .map_err(|e| GdkError::Network(format!("Failed to get response bytes: {}", e)))
+            .map_err(|e| GdkError::network_simple(format!("Failed to get response bytes: {}", e)))
     }
 
     /// Check if response indicates rate limiting
@@ -447,7 +447,7 @@ impl UrlUtils {
     /// Validate and parse a URL
     pub fn parse_url(url_str: &str) -> Result<Url> {
         Url::parse(url_str)
-            .map_err(|e| GdkError::Network(format!("Invalid URL '{}': {}", url_str, e)))
+            .map_err(|e| GdkError::network_simple(format!("Invalid URL '{}': {}", url_str, e)))
     }
 
     /// Check if a URL uses HTTPS
@@ -465,11 +465,11 @@ impl UrlUtils {
     /// Extract host and port from URL
     pub fn get_host_port(url: &Url) -> Result<(String, u16)> {
         let host = url.host_str()
-            .ok_or_else(|| GdkError::Network("URL has no host".to_string()))?
+            .ok_or_else(|| GdkError::network_simple("URL has no host".to_string()))?
             .to_string();
             
         let port = url.port_or_known_default()
-            .ok_or_else(|| GdkError::Network("Cannot determine port".to_string()))?;
+            .ok_or_else(|| GdkError::network_simple("Cannot determine port".to_string()))?;
             
         Ok((host, port))
     }
@@ -535,7 +535,7 @@ impl NetworkMonitor {
         }
 
         if successful_samples == 0 {
-            return Err(GdkError::Network("No successful latency measurements".to_string()));
+            return Err(GdkError::network_simple("No successful latency measurements".to_string()));
         }
 
         Ok(total_latency / successful_samples as u32)
@@ -558,7 +558,6 @@ impl Default for NetworkMonitor {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[tokio::test]
     async fn test_http_client_creation() {

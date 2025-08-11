@@ -4,7 +4,7 @@ use std::collections::HashMap;
 use std::fmt;
 
 /// Error codes for compatibility with original GDK
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 pub enum GdkErrorCode {
     // Network errors (1000-1999)
     NetworkConnectionFailed = 1001,
@@ -413,6 +413,61 @@ pub enum GdkError {
 }
 
 impl GdkError {
+    // Simplified constructors for backward compatibility
+    /// Create a simple network error with default code
+    pub fn network_simple(message: String) -> Self {
+        Self::network(GdkErrorCode::NetworkConnectionFailed, &message)
+    }
+    
+    /// Create a simple auth error with default code
+    pub fn auth_simple(message: String) -> Self {
+        Self::auth(GdkErrorCode::AuthInvalidCredentials, &message)
+    }
+    
+    /// Create a simple hardware wallet error with default code
+    pub fn hardware_wallet_simple(message: String) -> Self {
+        Self::hardware_wallet(GdkErrorCode::HardwareWalletDeviceError, &message)
+    }
+    
+    /// Create a simple persistence error with default code  
+    pub fn persistence_simple(message: String) -> Self {
+        Self::persistence(GdkErrorCode::PersistenceFileNotFound, &message)
+    }
+    
+    /// Create a simple transaction error with default code
+    pub fn transaction_simple(message: String) -> Self {
+        Self::transaction(GdkErrorCode::TransactionInvalidInput, &message)
+    }
+    
+    /// Create a simple invalid input error with default code
+    pub fn invalid_input_simple(message: String) -> Self {
+        Self::invalid_input(GdkErrorCode::InvalidInputFormat, &message)
+    }
+    
+    /// Create a simple crypto error with default code
+    pub fn crypto_simple(message: String) -> Self {
+        Self::crypto(GdkErrorCode::CryptoInvalidKey, &message)
+    }
+    
+    /// Create a simple JSON error with default code
+    pub fn json_simple(message: String) -> Self {
+        Self::json(GdkErrorCode::JsonSerializationFailed, &message)
+    }
+    
+    /// Create a simple I/O error with default code
+    pub fn io_simple(message: String) -> Self {
+        Self::io(GdkErrorCode::IoFileNotFound, &message)
+    }
+    
+    /// Create a simple hex error with default code
+    pub fn hex_simple(message: String) -> Self {
+        Self::hex(GdkErrorCode::HexDecodingFailed, &message)
+    }
+    
+    /// Create a simple unknown error with default code
+    pub fn unknown_simple(message: String) -> Self {
+        Self::unknown(GdkErrorCode::Unknown, &message)
+    }
     /// Get the error code
     pub fn code(&self) -> GdkErrorCode {
         match self {
@@ -1078,10 +1133,10 @@ impl ErrorRecovery {
     pub async fn execute_with_retry<F, T, Fut>(
         operation: F,
         max_global_attempts: u32,
-    ) -> Result<T, GdkError>
+    ) -> Result<T>
     where
         F: Fn() -> Fut,
-        Fut: std::future::Future<Output = Result<T, GdkError>>,
+        Fut: std::future::Future<Output = Result<T>>,
     {
         let mut global_attempts = 0;
         
@@ -1095,10 +1150,11 @@ impl ErrorRecovery {
                         return Err(error.with_context("max_global_attempts", &global_attempts.to_string()));
                     }
                     
-                    match error.recovery_strategy() {
+                    let recovery_strategy = error.recovery_strategy().clone();
+                    match recovery_strategy {
                         RecoveryStrategy::Retry { max_attempts, delay_ms, backoff_multiplier } => {
-                            if global_attempts < *max_attempts {
-                                let delay = (*delay_ms as f64 * backoff_multiplier.powi((global_attempts - 1) as i32)) as u64;
+                            if global_attempts < max_attempts {
+                                let delay = (delay_ms as f64 * backoff_multiplier.powi((global_attempts - 1) as i32)) as u64;
                                 log::debug!("Retrying operation after {}ms (attempt {}/{})", delay, global_attempts, max_attempts);
                                 tokio::time::sleep(tokio::time::Duration::from_millis(delay)).await;
                                 continue;
@@ -1107,9 +1163,9 @@ impl ErrorRecovery {
                             }
                         },
                         RecoveryStrategy::Reconnect { max_attempts, delay_ms } => {
-                            if global_attempts < *max_attempts {
+                            if global_attempts < max_attempts {
                                 log::debug!("Attempting reconnect after {}ms (attempt {}/{})", delay_ms, global_attempts, max_attempts);
-                                tokio::time::sleep(tokio::time::Duration::from_millis(*delay_ms)).await;
+                                tokio::time::sleep(tokio::time::Duration::from_millis(delay_ms)).await;
                                 // In a real implementation, this would trigger a reconnection
                                 continue;
                             } else {
@@ -1119,16 +1175,16 @@ impl ErrorRecovery {
                         RecoveryStrategy::Fallback { alternative } => {
                             log::debug!("Attempting fallback to: {}", alternative);
                             // In a real implementation, this would switch to the alternative method
-                            return Err(error.with_context("fallback_attempted", alternative));
+                            return Err(error.with_context("fallback_attempted", &alternative));
                         },
                         RecoveryStrategy::Reset { component } => {
                             log::debug!("Attempting reset of component: {}", component);
                             // In a real implementation, this would reset the specified component
-                            return Err(error.with_context("reset_attempted", component));
+                            return Err(error.with_context("reset_attempted", &component));
                         },
                         RecoveryStrategy::UserIntervention { required_action } => {
                             log::debug!("User intervention required: {}", required_action);
-                            return Err(error.with_context("user_intervention_required", required_action));
+                            return Err(error.with_context("user_intervention_required", &required_action));
                         },
                         RecoveryStrategy::None => {
                             return Err(error.with_context("no_recovery", "true"));
@@ -1271,12 +1327,17 @@ mod tests {
 
     #[tokio::test]
     async fn test_error_recovery() {
-        let mut attempt_count = 0;
+        use std::sync::atomic::{AtomicU32, Ordering};
+        use std::sync::Arc;
         
-        let operation = || {
-            attempt_count += 1;
+        let attempt_count = Arc::new(AtomicU32::new(0));
+        let count_clone = attempt_count.clone();
+        
+        let operation = move || {
+            let count = count_clone.clone();
             async move {
-                if attempt_count < 3 {
+                let attempts = count.fetch_add(1, Ordering::SeqCst) + 1;
+                if attempts < 3 {
                     Err(GdkError::network(GdkErrorCode::NetworkTimeout, "Temporary failure"))
                 } else {
                     Ok("Success")
@@ -1287,6 +1348,7 @@ mod tests {
         let result = ErrorRecovery::execute_with_retry(operation, 5).await;
         assert!(result.is_ok());
         assert_eq!(result.unwrap(), "Success");
+        assert_eq!(attempt_count.load(Ordering::SeqCst), 3);
     }
 
     #[test]

@@ -5,9 +5,7 @@ use gdk_rs::primitives::transaction::*;
 use gdk_rs::primitives::script::Script;
 use gdk_rs::primitives::encode::{Encodable, Decodable};
 use gdk_rs::transaction_builder::*;
-use gdk_rs::transaction_signer::*;
-use gdk_rs::primitives::address::{Address, Network};
-use secp256k1::{Secp256k1, SecretKey, PublicKey};
+use gdk_rs::primitives::address::Network;
 use std::io::Cursor;
 
 fn create_test_transaction(input_count: usize, output_count: usize, has_witness: bool) -> Transaction {

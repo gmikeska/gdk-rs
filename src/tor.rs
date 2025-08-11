@@ -156,7 +156,7 @@ impl TorManager {
             }
         }
         
-        Err(GdkError::Network("Max Tor connection retries exceeded".to_string()))
+        Err(GdkError::network_simple("Max Tor connection retries exceeded".to_string()))
     }
 
     /// Try to connect once through Tor
@@ -166,11 +166,11 @@ impl TorManager {
             self.config.connection_timeout,
             TcpStream::connect(self.config.socks_proxy)
         ).await
-        .map_err(|_| GdkError::Network("Tor proxy connection timeout".to_string()))?
-        .map_err(|e| GdkError::Network(format!("Failed to connect to Tor proxy: {}", e)))?;
+        .map_err(|_| GdkError::network_simple("Tor proxy connection timeout".to_string()))?
+        .map_err(|e| GdkError::network_simple(format!("Failed to connect to Tor proxy: {}", e)))?;
 
         // Perform SOCKS5 handshake
-        let mut stream = self.socks5_handshake(proxy_stream, target, port).await?;
+        let stream = self.socks5_handshake(proxy_stream, target, port).await?;
         
         Ok(stream)
     }
@@ -179,18 +179,18 @@ impl TorManager {
     async fn socks5_handshake(&self, mut stream: TcpStream, target: &str, port: u16) -> Result<TcpStream> {
         // Step 1: Authentication negotiation
         stream.write_all(&[SOCKS5_VERSION, 1, SOCKS5_NO_AUTH]).await
-            .map_err(|e| GdkError::Network(format!("SOCKS5 auth negotiation failed: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("SOCKS5 auth negotiation failed: {}", e)))?;
 
         let mut response = [0u8; 2];
         stream.read_exact(&mut response).await
-            .map_err(|e| GdkError::Network(format!("SOCKS5 auth response failed: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("SOCKS5 auth response failed: {}", e)))?;
 
         if response[0] != SOCKS5_VERSION {
-            return Err(GdkError::Network("Invalid SOCKS5 version".to_string()));
+            return Err(GdkError::network_simple("Invalid SOCKS5 version".to_string()));
         }
 
         if response[1] != SOCKS5_NO_AUTH {
-            return Err(GdkError::Network("SOCKS5 authentication required but not supported".to_string()));
+            return Err(GdkError::network_simple("SOCKS5 authentication required but not supported".to_string()));
         }
 
         // Step 2: Connection request
@@ -227,15 +227,15 @@ impl TorManager {
         request.extend_from_slice(&port.to_be_bytes());
 
         stream.write_all(&request).await
-            .map_err(|e| GdkError::Network(format!("SOCKS5 connection request failed: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("SOCKS5 connection request failed: {}", e)))?;
 
         // Read response
         let mut response = [0u8; 4];
         stream.read_exact(&mut response).await
-            .map_err(|e| GdkError::Network(format!("SOCKS5 connection response failed: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("SOCKS5 connection response failed: {}", e)))?;
 
         if response[0] != SOCKS5_VERSION {
-            return Err(GdkError::Network("Invalid SOCKS5 response version".to_string()));
+            return Err(GdkError::network_simple("Invalid SOCKS5 response version".to_string()));
         }
 
         if response[1] != 0 {
@@ -250,7 +250,7 @@ impl TorManager {
                 8 => "Address type not supported",
                 _ => "Unknown SOCKS error",
             };
-            return Err(GdkError::Network(format!("SOCKS5 error: {}", error_msg)));
+            return Err(GdkError::network_simple(format!("SOCKS5 error: {}", error_msg)));
         }
 
         // Read the bound address (we don't need it, but must read it)
@@ -258,23 +258,23 @@ impl TorManager {
             SOCKS5_IPV4 => {
                 let mut addr = [0u8; 6]; // 4 bytes IP + 2 bytes port
                 stream.read_exact(&mut addr).await
-                    .map_err(|e| GdkError::Network(format!("Failed to read SOCKS5 bound address: {}", e)))?;
+                    .map_err(|e| GdkError::network_simple(format!("Failed to read SOCKS5 bound address: {}", e)))?;
             }
             SOCKS5_DOMAIN => {
                 let mut len = [0u8; 1];
                 stream.read_exact(&mut len).await
-                    .map_err(|e| GdkError::Network(format!("Failed to read SOCKS5 domain length: {}", e)))?;
+                    .map_err(|e| GdkError::network_simple(format!("Failed to read SOCKS5 domain length: {}", e)))?;
                 let mut addr = vec![0u8; len[0] as usize + 2]; // domain + 2 bytes port
                 stream.read_exact(&mut addr).await
-                    .map_err(|e| GdkError::Network(format!("Failed to read SOCKS5 bound address: {}", e)))?;
+                    .map_err(|e| GdkError::network_simple(format!("Failed to read SOCKS5 bound address: {}", e)))?;
             }
             SOCKS5_IPV6 => {
                 let mut addr = [0u8; 18]; // 16 bytes IP + 2 bytes port
                 stream.read_exact(&mut addr).await
-                    .map_err(|e| GdkError::Network(format!("Failed to read SOCKS5 bound address: {}", e)))?;
+                    .map_err(|e| GdkError::network_simple(format!("Failed to read SOCKS5 bound address: {}", e)))?;
             }
             _ => {
-                return Err(GdkError::Network("Invalid SOCKS5 address type in response".to_string()));
+                return Err(GdkError::network_simple("Invalid SOCKS5 address type in response".to_string()));
             }
         }
 
@@ -310,7 +310,7 @@ impl TorManager {
             
             Ok(circuit_id)
         } else {
-            Err(GdkError::Network("Tor control connection not available".to_string()))
+            Err(GdkError::network_simple("Tor control connection not available".to_string()))
         }
     }
 
@@ -385,7 +385,7 @@ impl TorControlConnection {
     /// Create new control connection
     pub async fn new(control_addr: SocketAddr, password: Option<String>) -> Result<Self> {
         let stream = TcpStream::connect(control_addr).await
-            .map_err(|e| GdkError::Network(format!("Failed to connect to Tor control port: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("Failed to connect to Tor control port: {}", e)))?;
 
         let mut conn = Self {
             stream,
@@ -412,34 +412,34 @@ impl TorControlConnection {
         };
 
         self.stream.write_all(auth_cmd.as_bytes()).await
-            .map_err(|e| GdkError::Network(format!("Failed to send auth command: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("Failed to send auth command: {}", e)))?;
 
         let mut response = vec![0u8; 1024];
         let n = self.stream.read(&mut response).await
-            .map_err(|e| GdkError::Network(format!("Failed to read auth response: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("Failed to read auth response: {}", e)))?;
 
         let response_str = String::from_utf8_lossy(&response[..n]);
         if response_str.starts_with("250") {
             self.authenticated = true;
             Ok(())
         } else {
-            Err(GdkError::Network(format!("Tor authentication failed: {}", response_str)))
+            Err(GdkError::network_simple(format!("Tor authentication failed: {}", response_str)))
         }
     }
 
     /// Create a new circuit
     pub async fn new_circuit(&mut self) -> Result<String> {
         if !self.authenticated {
-            return Err(GdkError::Network("Not authenticated with Tor control port".to_string()));
+            return Err(GdkError::network_simple("Not authenticated with Tor control port".to_string()));
         }
 
         let circuit_cmd = "EXTENDCIRCUIT 0\r\n";
         self.stream.write_all(circuit_cmd.as_bytes()).await
-            .map_err(|e| GdkError::Network(format!("Failed to send circuit command: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("Failed to send circuit command: {}", e)))?;
 
         let mut response = vec![0u8; 1024];
         let n = self.stream.read(&mut response).await
-            .map_err(|e| GdkError::Network(format!("Failed to read circuit response: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("Failed to read circuit response: {}", e)))?;
 
         let response_str = String::from_utf8_lossy(&response[..n]);
         if let Some(circuit_line) = response_str.lines().find(|line| line.starts_with("250 EXTENDED")) {
@@ -447,48 +447,48 @@ impl TorControlConnection {
             if let Some(circuit_id) = circuit_line.split_whitespace().nth(2) {
                 Ok(circuit_id.to_string())
             } else {
-                Err(GdkError::Network("Failed to parse circuit ID".to_string()))
+                Err(GdkError::network_simple("Failed to parse circuit ID".to_string()))
             }
         } else {
-            Err(GdkError::Network(format!("Failed to create circuit: {}", response_str)))
+            Err(GdkError::network_simple(format!("Failed to create circuit: {}", response_str)))
         }
     }
 
     /// Close a circuit
     pub async fn close_circuit(&mut self, circuit_id: &str) -> Result<()> {
         if !self.authenticated {
-            return Err(GdkError::Network("Not authenticated with Tor control port".to_string()));
+            return Err(GdkError::network_simple("Not authenticated with Tor control port".to_string()));
         }
 
         let close_cmd = format!("CLOSECIRCUIT {}\r\n", circuit_id);
         self.stream.write_all(close_cmd.as_bytes()).await
-            .map_err(|e| GdkError::Network(format!("Failed to send close circuit command: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("Failed to send close circuit command: {}", e)))?;
 
         let mut response = vec![0u8; 1024];
         let n = self.stream.read(&mut response).await
-            .map_err(|e| GdkError::Network(format!("Failed to read close circuit response: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("Failed to read close circuit response: {}", e)))?;
 
         let response_str = String::from_utf8_lossy(&response[..n]);
         if response_str.starts_with("250") {
             Ok(())
         } else {
-            Err(GdkError::Network(format!("Failed to close circuit: {}", response_str)))
+            Err(GdkError::network_simple(format!("Failed to close circuit: {}", response_str)))
         }
     }
 
     /// Get circuit information
     pub async fn get_circuit_info(&mut self, circuit_id: &str) -> Result<TorCircuit> {
         if !self.authenticated {
-            return Err(GdkError::Network("Not authenticated with Tor control port".to_string()));
+            return Err(GdkError::network_simple("Not authenticated with Tor control port".to_string()));
         }
 
         let info_cmd = format!("GETINFO circuit-status\r\n");
         self.stream.write_all(info_cmd.as_bytes()).await
-            .map_err(|e| GdkError::Network(format!("Failed to send circuit info command: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("Failed to send circuit info command: {}", e)))?;
 
         let mut response = vec![0u8; 4096];
         let n = self.stream.read(&mut response).await
-            .map_err(|e| GdkError::Network(format!("Failed to read circuit info response: {}", e)))?;
+            .map_err(|e| GdkError::network_simple(format!("Failed to read circuit info response: {}", e)))?;
 
         let response_str = String::from_utf8_lossy(&response[..n]);
         
@@ -505,7 +505,7 @@ impl TorControlConnection {
             }
         }
 
-        Err(GdkError::Network(format!("Circuit {} not found", circuit_id)))
+        Err(GdkError::network_simple(format!("Circuit {} not found", circuit_id)))
     }
 }
 

@@ -116,12 +116,11 @@
 
 use crate::primitives::bip32::{ExtendedPrivateKey, ExtendedPublicKey, DerivationPath, Network as BipNetwork};
 use crate::primitives::address::{Address, Network};
-use crate::bip39::{Mnemonic, Seed};
+use crate::bip39::Mnemonic;
 use crate::{Result, GdkError};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
-use secp256k1::{PublicKey, Secp256k1};
 
 /// Subaccount types supported by the wallet
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
@@ -350,7 +349,7 @@ impl AddressManager {
         let keys = self.subaccount_keys.lock().unwrap();
         let extended_pubkey = keys
             .get(&subaccount.id)
-            .ok_or_else(|| GdkError::InvalidInput("Subaccount not registered".to_string()))?;
+            .ok_or_else(|| GdkError::invalid_input_simple("Subaccount not registered".to_string()))?;
 
         // Derive the specific key for this address
         let derivation_path = subaccount.address_path(is_change, index);
@@ -629,7 +628,7 @@ impl Wallet {
         let mut subaccounts = self.subaccounts.lock().unwrap();
         let subaccount = subaccounts
             .get_mut(&subaccount_id)
-            .ok_or_else(|| GdkError::InvalidInput("Subaccount not found".to_string()))?;
+            .ok_or_else(|| GdkError::invalid_input_simple("Subaccount not found".to_string()))?;
 
         if let Some(name) = name {
             subaccount.name = name;
@@ -646,7 +645,7 @@ impl Wallet {
         let mut subaccounts = self.subaccounts.lock().unwrap();
         let subaccount = subaccounts
             .get_mut(&subaccount_id)
-            .ok_or_else(|| GdkError::InvalidInput("Subaccount not found".to_string()))?;
+            .ok_or_else(|| GdkError::invalid_input_simple("Subaccount not found".to_string()))?;
 
         // Find the next unused receiving address
         let addresses = self.address_manager.get_addresses(subaccount_id);
@@ -685,7 +684,7 @@ impl Wallet {
         let mut subaccounts = self.subaccounts.lock().unwrap();
         let subaccount = subaccounts
             .get_mut(&subaccount_id)
-            .ok_or_else(|| GdkError::InvalidInput("Subaccount not found".to_string()))?;
+            .ok_or_else(|| GdkError::invalid_input_simple("Subaccount not found".to_string()))?;
 
         subaccount.update_balance(confirmed, unconfirmed, utxo_count);
         Ok(())
@@ -703,7 +702,7 @@ impl Wallet {
         let mut subaccounts = self.subaccounts.lock().unwrap();
         let subaccount = subaccounts
             .get_mut(&subaccount_id)
-            .ok_or_else(|| GdkError::InvalidInput("Subaccount not found".to_string()))?;
+            .ok_or_else(|| GdkError::invalid_input_simple("Subaccount not found".to_string()))?;
 
         subaccount.last_sync = Some(
             std::time::SystemTime::now()

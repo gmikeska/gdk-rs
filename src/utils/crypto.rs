@@ -11,7 +11,8 @@ use crate::{GdkError, Result};
 use hmac::{Hmac, Mac};
 use pbkdf2::pbkdf2;
 use rand::{RngCore, CryptoRng};
-use secp256k1::{Message, PublicKey, SecretKey, Signature, Secp256k1, All};
+use secp256k1::{Message, PublicKey, SecretKey, Secp256k1, All};
+use secp256k1::ecdsa::Signature;
 use sha2::{Sha256, Sha512, Digest};
 use ripemd::Ripemd160;
 use subtle::ConstantTimeEq;
@@ -203,8 +204,8 @@ impl MessageSigning {
     /// Sign a message with a private key
     pub fn sign_message(&self, message: &[u8], private_key: &SecretKey) -> Result<Signature> {
         let message_hash = Hash::sha256(message);
-        let message = Message::from_slice(&message_hash)
-            .map_err(|e| GdkError::Crypto(format!("Invalid message: {}", e)))?;
+        let message = Message::from_digest_slice(&message_hash)
+            .map_err(|e| GdkError::crypto_simple(format!("Invalid message hash: {}", e)))?;
         
         Ok(self.secp.sign_ecdsa(&message, private_key))
     }
@@ -217,8 +218,8 @@ impl MessageSigning {
         public_key: &PublicKey,
     ) -> Result<bool> {
         let message_hash = Hash::sha256(message);
-        let message = Message::from_slice(&message_hash)
-            .map_err(|e| GdkError::Crypto(format!("Invalid message: {}", e)))?;
+        let message = Message::from_digest_slice(&message_hash)
+            .map_err(|e| GdkError::crypto_simple(format!("Invalid message hash: {}", e)))?;
         
         match self.secp.verify_ecdsa(&message, signature, public_key) {
             Ok(()) => Ok(true),
@@ -228,8 +229,8 @@ impl MessageSigning {
 
     /// Sign a hash directly (for when you already have the hash)
     pub fn sign_hash(&self, hash: &[u8; 32], private_key: &SecretKey) -> Result<Signature> {
-        let message = Message::from_slice(hash)
-            .map_err(|e| GdkError::Crypto(format!("Invalid hash: {}", e)))?;
+        let message = Message::from_digest_slice(hash)
+            .map_err(|e| GdkError::crypto_simple(format!("Invalid message hash: {}", e)))?;
         
         Ok(self.secp.sign_ecdsa(&message, private_key))
     }
@@ -241,8 +242,8 @@ impl MessageSigning {
         signature: &Signature,
         public_key: &PublicKey,
     ) -> Result<bool> {
-        let message = Message::from_slice(hash)
-            .map_err(|e| GdkError::Crypto(format!("Invalid hash: {}", e)))?;
+        let message = Message::from_digest_slice(hash)
+            .map_err(|e| GdkError::crypto_simple(format!("Invalid message hash: {}", e)))?;
         
         match self.secp.verify_ecdsa(&message, signature, public_key) {
             Ok(()) => Ok(true),
@@ -257,8 +258,8 @@ impl MessageSigning {
         signature: &secp256k1::ecdsa::RecoverableSignature,
     ) -> Result<PublicKey> {
         let message_hash = Hash::sha256(message);
-        let message = Message::from_slice(&message_hash)
-            .map_err(|e| GdkError::crypto(crate::error::GdkErrorCode::CryptoInvalidKey, &format!("Invalid message: {}", e)))?;
+        let message = Message::from_digest_slice(&message_hash)
+            .map_err(|e| GdkError::crypto_simple(format!("Invalid message hash: {}", e)))?;
         
         self.secp.recover_ecdsa(&message, signature)
             .map_err(|e| GdkError::crypto(crate::error::GdkErrorCode::CryptoSignatureFailed, &format!("Key recovery failed: {}", e)))
@@ -325,7 +326,7 @@ impl CryptoUtils {
         rng.fill_bytes(&mut key_bytes);
         
         SecretKey::from_slice(&key_bytes)
-            .map_err(|e| GdkError::Crypto(format!("Invalid private key: {}", e)))
+            .map_err(|e| GdkError::crypto_simple(format!("Invalid private key: {}", e)))
     }
 
     /// Derive public key from private key
@@ -342,17 +343,17 @@ impl CryptoUtils {
     /// Convert hex string to bytes
     pub fn hex_to_bytes(hex_str: &str) -> Result<Vec<u8>> {
         hex::decode(hex_str)
-            .map_err(|e| GdkError::Crypto(format!("Invalid hex string: {}", e)))
+            .map_err(|e| GdkError::crypto_simple(format!("Invalid hex string: {}", e)))
     }
 
     /// Validate that a byte slice is a valid private key
     pub fn validate_private_key(key_bytes: &[u8]) -> Result<()> {
         if key_bytes.len() != 32 {
-            return Err(GdkError::Crypto("Private key must be 32 bytes".to_string()));
+            return Err(GdkError::crypto_simple("Private key must be 32 bytes".to_string()));
         }
 
         SecretKey::from_slice(key_bytes)
-            .map_err(|e| GdkError::Crypto(format!("Invalid private key: {}", e)))?;
+            .map_err(|e| GdkError::crypto_simple(format!("Invalid private key: {}", e)))?;
         
         Ok(())
     }
@@ -360,7 +361,7 @@ impl CryptoUtils {
     /// Validate that a byte slice is a valid public key
     pub fn validate_public_key(key_bytes: &[u8]) -> Result<()> {
         PublicKey::from_slice(key_bytes)
-            .map_err(|e| GdkError::Crypto(format!("Invalid public key: {}", e)))?;
+            .map_err(|e| GdkError::crypto_simple(format!("Invalid public key: {}", e)))?;
         
         Ok(())
     }
@@ -390,7 +391,7 @@ impl SecureString {
     /// Get the string representation
     pub fn as_str(&self) -> Result<&str> {
         std::str::from_utf8(&self.data)
-            .map_err(|e| GdkError::Crypto(format!("Invalid UTF-8: {}", e)))
+            .map_err(|e| GdkError::crypto_simple(format!("Invalid UTF-8: {}", e)))
     }
 
     /// Get the length

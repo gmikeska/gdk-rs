@@ -57,7 +57,9 @@ flate2 = { version = "1.0", optional = true }
 default = []
 hardware-wallets = []
 tor-support = []
+liquid-network = []
 compression = ["flate2"]
+test-full = ["hardware-wallets", "liquid-network"]
 
 [dev-dependencies]
 axum = { version = "0.7", features = ["ws", "macros"] }

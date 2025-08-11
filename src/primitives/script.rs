@@ -8,9 +8,10 @@ use std::io::{Read, Write};
 
 
 /// Bitcoin script opcodes
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[repr(u8)]
-pub enum Opcode {
+#[allow(non_camel_case_types)]
+pub enum OpCode {
     // Push value
     OP_0 = 0x00,
     OP_PUSHDATA1 = 0x4c,
@@ -147,122 +148,122 @@ pub enum Opcode {
     OP_INVALIDOPCODE = 0xff,
 }
 
-impl From<u8> for Opcode {
+impl From<u8> for OpCode {
     fn from(b: u8) -> Self {
         match b {
-            0x00 => Opcode::OP_0,
-            0x4c => Opcode::OP_PUSHDATA1,
-            0x4d => Opcode::OP_PUSHDATA2,
-            0x4e => Opcode::OP_PUSHDATA4,
-            0x4f => Opcode::OP_1NEGATE,
-            0x50 => Opcode::OP_RESERVED,
-            0x51 => Opcode::OP_1,
-            0x52 => Opcode::OP_2,
-            0x53 => Opcode::OP_3,
-            0x54 => Opcode::OP_4,
-            0x55 => Opcode::OP_5,
-            0x56 => Opcode::OP_6,
-            0x57 => Opcode::OP_7,
-            0x58 => Opcode::OP_8,
-            0x59 => Opcode::OP_9,
-            0x5a => Opcode::OP_10,
-            0x5b => Opcode::OP_11,
-            0x5c => Opcode::OP_12,
-            0x5d => Opcode::OP_13,
-            0x5e => Opcode::OP_14,
-            0x5f => Opcode::OP_15,
-            0x60 => Opcode::OP_16,
-            0x61 => Opcode::OP_NOP,
-            0x62 => Opcode::OP_VER,
-            0x63 => Opcode::OP_IF,
-            0x64 => Opcode::OP_NOTIF,
-            0x65 => Opcode::OP_VERIF,
-            0x66 => Opcode::OP_VERNOTIF,
-            0x67 => Opcode::OP_ELSE,
-            0x68 => Opcode::OP_ENDIF,
-            0x69 => Opcode::OP_VERIFY,
-            0x6a => Opcode::OP_RETURN,
-            0x6b => Opcode::OP_TOALTSTACK,
-            0x6c => Opcode::OP_FROMALTSTACK,
-            0x6d => Opcode::OP_2DROP,
-            0x6e => Opcode::OP_2DUP,
-            0x6f => Opcode::OP_3DUP,
-            0x70 => Opcode::OP_2OVER,
-            0x71 => Opcode::OP_2ROT,
-            0x72 => Opcode::OP_2SWAP,
-            0x73 => Opcode::OP_IFDUP,
-            0x74 => Opcode::OP_DEPTH,
-            0x75 => Opcode::OP_DROP,
-            0x76 => Opcode::OP_DUP,
-            0x77 => Opcode::OP_NIP,
-            0x78 => Opcode::OP_OVER,
-            0x79 => Opcode::OP_PICK,
-            0x7a => Opcode::OP_ROLL,
-            0x7b => Opcode::OP_ROT,
-            0x7c => Opcode::OP_SWAP,
-            0x7d => Opcode::OP_TUCK,
-            0x7e => Opcode::OP_CAT,
-            0x7f => Opcode::OP_SUBSTR,
-            0x80 => Opcode::OP_LEFT,
-            0x81 => Opcode::OP_RIGHT,
-            0x82 => Opcode::OP_SIZE,
-            0x83 => Opcode::OP_INVERT,
-            0x84 => Opcode::OP_AND,
-            0x85 => Opcode::OP_OR,
-            0x86 => Opcode::OP_XOR,
-            0x87 => Opcode::OP_EQUAL,
-            0x88 => Opcode::OP_EQUALVERIFY,
-            0x89 => Opcode::OP_RESERVED1,
-            0x8a => Opcode::OP_RESERVED2,
-            0x8b => Opcode::OP_1ADD,
-            0x8c => Opcode::OP_1SUB,
-            0x8d => Opcode::OP_2MUL,
-            0x8e => Opcode::OP_2DIV,
-            0x8f => Opcode::OP_NEGATE,
-            0x90 => Opcode::OP_ABS,
-            0x91 => Opcode::OP_NOT,
-            0x92 => Opcode::OP_0NOTEQUAL,
-            0x93 => Opcode::OP_ADD,
-            0x94 => Opcode::OP_SUB,
-            0x95 => Opcode::OP_MUL,
-            0x96 => Opcode::OP_DIV,
-            0x97 => Opcode::OP_MOD,
-            0x98 => Opcode::OP_LSHIFT,
-            0x99 => Opcode::OP_RSHIFT,
-            0x9a => Opcode::OP_BOOLAND,
-            0x9b => Opcode::OP_BOOLOR,
-            0x9c => Opcode::OP_NUMEQUAL,
-            0x9d => Opcode::OP_NUMEQUALVERIFY,
-            0x9e => Opcode::OP_NUMNOTEQUAL,
-            0x9f => Opcode::OP_LESSTHAN,
-            0xa0 => Opcode::OP_GREATERTHAN,
-            0xa1 => Opcode::OP_LESSTHANOREQUAL,
-            0xa2 => Opcode::OP_GREATERTHANOREQUAL,
-            0xa3 => Opcode::OP_MIN,
-            0xa4 => Opcode::OP_MAX,
-            0xa5 => Opcode::OP_WITHIN,
-            0xa6 => Opcode::OP_RIPEMD160,
-            0xa7 => Opcode::OP_SHA1,
-            0xa8 => Opcode::OP_SHA256,
-            0xa9 => Opcode::OP_HASH160,
-            0xaa => Opcode::OP_HASH256,
-            0xab => Opcode::OP_CODESEPARATOR,
-            0xac => Opcode::OP_CHECKSIG,
-            0xad => Opcode::OP_CHECKSIGVERIFY,
-            0xae => Opcode::OP_CHECKMULTISIG,
-            0xaf => Opcode::OP_CHECKMULTISIGVERIFY,
-            0xb0 => Opcode::OP_NOP1,
-            0xb1 => Opcode::OP_CHECKLOCKTIMEVERIFY,
-            0xb2 => Opcode::OP_CHECKSEQUENCEVERIFY,
-            0xb3 => Opcode::OP_NOP4,
-            0xb4 => Opcode::OP_NOP5,
-            0xb5 => Opcode::OP_NOP6,
-            0xb6 => Opcode::OP_NOP7,
-            0xb7 => Opcode::OP_NOP8,
-            0xb8 => Opcode::OP_NOP9,
-            0xb9 => Opcode::OP_NOP10,
-            0xba => Opcode::OP_CHECKSIGADD,
-            _ => Opcode::OP_INVALIDOPCODE,
+            0x00 => OpCode::OP_0,
+            0x4c => OpCode::OP_PUSHDATA1,
+            0x4d => OpCode::OP_PUSHDATA2,
+            0x4e => OpCode::OP_PUSHDATA4,
+            0x4f => OpCode::OP_1NEGATE,
+            0x50 => OpCode::OP_RESERVED,
+            0x51 => OpCode::OP_1,
+            0x52 => OpCode::OP_2,
+            0x53 => OpCode::OP_3,
+            0x54 => OpCode::OP_4,
+            0x55 => OpCode::OP_5,
+            0x56 => OpCode::OP_6,
+            0x57 => OpCode::OP_7,
+            0x58 => OpCode::OP_8,
+            0x59 => OpCode::OP_9,
+            0x5a => OpCode::OP_10,
+            0x5b => OpCode::OP_11,
+            0x5c => OpCode::OP_12,
+            0x5d => OpCode::OP_13,
+            0x5e => OpCode::OP_14,
+            0x5f => OpCode::OP_15,
+            0x60 => OpCode::OP_16,
+            0x61 => OpCode::OP_NOP,
+            0x62 => OpCode::OP_VER,
+            0x63 => OpCode::OP_IF,
+            0x64 => OpCode::OP_NOTIF,
+            0x65 => OpCode::OP_VERIF,
+            0x66 => OpCode::OP_VERNOTIF,
+            0x67 => OpCode::OP_ELSE,
+            0x68 => OpCode::OP_ENDIF,
+            0x69 => OpCode::OP_VERIFY,
+            0x6a => OpCode::OP_RETURN,
+            0x6b => OpCode::OP_TOALTSTACK,
+            0x6c => OpCode::OP_FROMALTSTACK,
+            0x6d => OpCode::OP_2DROP,
+            0x6e => OpCode::OP_2DUP,
+            0x6f => OpCode::OP_3DUP,
+            0x70 => OpCode::OP_2OVER,
+            0x71 => OpCode::OP_2ROT,
+            0x72 => OpCode::OP_2SWAP,
+            0x73 => OpCode::OP_IFDUP,
+            0x74 => OpCode::OP_DEPTH,
+            0x75 => OpCode::OP_DROP,
+            0x76 => OpCode::OP_DUP,
+            0x77 => OpCode::OP_NIP,
+            0x78 => OpCode::OP_OVER,
+            0x79 => OpCode::OP_PICK,
+            0x7a => OpCode::OP_ROLL,
+            0x7b => OpCode::OP_ROT,
+            0x7c => OpCode::OP_SWAP,
+            0x7d => OpCode::OP_TUCK,
+            0x7e => OpCode::OP_CAT,
+            0x7f => OpCode::OP_SUBSTR,
+            0x80 => OpCode::OP_LEFT,
+            0x81 => OpCode::OP_RIGHT,
+            0x82 => OpCode::OP_SIZE,
+            0x83 => OpCode::OP_INVERT,
+            0x84 => OpCode::OP_AND,
+            0x85 => OpCode::OP_OR,
+            0x86 => OpCode::OP_XOR,
+            0x87 => OpCode::OP_EQUAL,
+            0x88 => OpCode::OP_EQUALVERIFY,
+            0x89 => OpCode::OP_RESERVED1,
+            0x8a => OpCode::OP_RESERVED2,
+            0x8b => OpCode::OP_1ADD,
+            0x8c => OpCode::OP_1SUB,
+            0x8d => OpCode::OP_2MUL,
+            0x8e => OpCode::OP_2DIV,
+            0x8f => OpCode::OP_NEGATE,
+            0x90 => OpCode::OP_ABS,
+            0x91 => OpCode::OP_NOT,
+            0x92 => OpCode::OP_0NOTEQUAL,
+            0x93 => OpCode::OP_ADD,
+            0x94 => OpCode::OP_SUB,
+            0x95 => OpCode::OP_MUL,
+            0x96 => OpCode::OP_DIV,
+            0x97 => OpCode::OP_MOD,
+            0x98 => OpCode::OP_LSHIFT,
+            0x99 => OpCode::OP_RSHIFT,
+            0x9a => OpCode::OP_BOOLAND,
+            0x9b => OpCode::OP_BOOLOR,
+            0x9c => OpCode::OP_NUMEQUAL,
+            0x9d => OpCode::OP_NUMEQUALVERIFY,
+            0x9e => OpCode::OP_NUMNOTEQUAL,
+            0x9f => OpCode::OP_LESSTHAN,
+            0xa0 => OpCode::OP_GREATERTHAN,
+            0xa1 => OpCode::OP_LESSTHANOREQUAL,
+            0xa2 => OpCode::OP_GREATERTHANOREQUAL,
+            0xa3 => OpCode::OP_MIN,
+            0xa4 => OpCode::OP_MAX,
+            0xa5 => OpCode::OP_WITHIN,
+            0xa6 => OpCode::OP_RIPEMD160,
+            0xa7 => OpCode::OP_SHA1,
+            0xa8 => OpCode::OP_SHA256,
+            0xa9 => OpCode::OP_HASH160,
+            0xaa => OpCode::OP_HASH256,
+            0xab => OpCode::OP_CODESEPARATOR,
+            0xac => OpCode::OP_CHECKSIG,
+            0xad => OpCode::OP_CHECKSIGVERIFY,
+            0xae => OpCode::OP_CHECKMULTISIG,
+            0xaf => OpCode::OP_CHECKMULTISIGVERIFY,
+            0xb0 => OpCode::OP_NOP1,
+            0xb1 => OpCode::OP_CHECKLOCKTIMEVERIFY,
+            0xb2 => OpCode::OP_CHECKSEQUENCEVERIFY,
+            0xb3 => OpCode::OP_NOP4,
+            0xb4 => OpCode::OP_NOP5,
+            0xb5 => OpCode::OP_NOP6,
+            0xb6 => OpCode::OP_NOP7,
+            0xb7 => OpCode::OP_NOP8,
+            0xb8 => OpCode::OP_NOP9,
+            0xb9 => OpCode::OP_NOP10,
+            0xba => OpCode::OP_CHECKSIGADD,
+            _ => OpCode::OP_INVALIDOPCODE,
         }
     }
 }
@@ -273,7 +274,7 @@ pub enum Instruction {
     /// Push data onto the stack
     PushBytes(Vec<u8>),
     /// Execute an opcode
-    Op(Opcode),
+    Op(OpCode),
 }
 
 /// Bitcoin script
@@ -318,7 +319,7 @@ impl Script {
             if opcode <= 75 {
                 // Direct push of 1-75 bytes
                 if i + opcode as usize > self.0.len() {
-                    return Err(GdkError::InvalidInput("Script truncated".to_string()));
+                    return Err(GdkError::invalid_input_simple("Script truncated".to_string()));
                 }
                 let data = self.0[i..i + opcode as usize].to_vec();
                 instructions.push(Instruction::PushBytes(data));
@@ -326,12 +327,12 @@ impl Script {
             } else if opcode == 0x4c {
                 // OP_PUSHDATA1
                 if i >= self.0.len() {
-                    return Err(GdkError::InvalidInput("Script truncated".to_string()));
+                    return Err(GdkError::invalid_input_simple("Script truncated".to_string()));
                 }
                 let len = self.0[i] as usize;
                 i += 1;
                 if i + len > self.0.len() {
-                    return Err(GdkError::InvalidInput("Script truncated".to_string()));
+                    return Err(GdkError::invalid_input_simple("Script truncated".to_string()));
                 }
                 let data = self.0[i..i + len].to_vec();
                 instructions.push(Instruction::PushBytes(data));
@@ -339,12 +340,12 @@ impl Script {
             } else if opcode == 0x4d {
                 // OP_PUSHDATA2
                 if i + 1 >= self.0.len() {
-                    return Err(GdkError::InvalidInput("Script truncated".to_string()));
+                    return Err(GdkError::invalid_input_simple("Script truncated".to_string()));
                 }
                 let len = u16::from_le_bytes([self.0[i], self.0[i + 1]]) as usize;
                 i += 2;
                 if i + len > self.0.len() {
-                    return Err(GdkError::InvalidInput("Script truncated".to_string()));
+                    return Err(GdkError::invalid_input_simple("Script truncated".to_string()));
                 }
                 let data = self.0[i..i + len].to_vec();
                 instructions.push(Instruction::PushBytes(data));
@@ -352,19 +353,19 @@ impl Script {
             } else if opcode == 0x4e {
                 // OP_PUSHDATA4
                 if i + 3 >= self.0.len() {
-                    return Err(GdkError::InvalidInput("Script truncated".to_string()));
+                    return Err(GdkError::invalid_input_simple("Script truncated".to_string()));
                 }
                 let len = u32::from_le_bytes([self.0[i], self.0[i + 1], self.0[i + 2], self.0[i + 3]]) as usize;
                 i += 4;
                 if i + len > self.0.len() {
-                    return Err(GdkError::InvalidInput("Script truncated".to_string()));
+                    return Err(GdkError::invalid_input_simple("Script truncated".to_string()));
                 }
                 let data = self.0[i..i + len].to_vec();
                 instructions.push(Instruction::PushBytes(data));
                 i += len;
             } else {
                 // Regular opcode
-                instructions.push(Instruction::Op(Opcode::from(opcode)));
+                instructions.push(Instruction::Op(OpCode::from(opcode)));
             }
         }
         
@@ -442,7 +443,7 @@ impl Script {
     pub fn validate(&self) -> Result<()> {
         // Check maximum script size (10,000 bytes)
         if self.0.len() > 10000 {
-            return Err(GdkError::InvalidInput("Script too large".to_string()));
+            return Err(GdkError::invalid_input_simple("Script too large".to_string()));
         }
         
         // Parse instructions to validate structure
@@ -456,7 +457,7 @@ impl Script {
                     push_count += 1;
                     // Check maximum push size (520 bytes)
                     if data.len() > 520 {
-                        return Err(GdkError::InvalidInput("Push data too large".to_string()));
+                        return Err(GdkError::invalid_input_simple("Push data too large".to_string()));
                     }
                 }
                 Instruction::Op(_) => {}
@@ -465,7 +466,7 @@ impl Script {
         
         // Check maximum number of operations (201)
         if instructions.len() > 201 {
-            return Err(GdkError::InvalidInput("Too many operations in script".to_string()));
+            return Err(GdkError::invalid_input_simple("Too many operations in script".to_string()));
         }
         
         Ok(())
@@ -584,13 +585,13 @@ impl<'a> ScriptExecutor<'a> {
         for instruction in instructions {
             self.op_count += 1;
             if self.op_count > 201 {
-                return Err(GdkError::InvalidInput("Too many operations".to_string()));
+                return Err(GdkError::invalid_input_simple("Too many operations".to_string()));
             }
 
             match instruction {
                 Instruction::PushBytes(data) => {
                     if data.len() > 520 {
-                        return Err(GdkError::InvalidInput("Push data too large".to_string()));
+                        return Err(GdkError::invalid_input_simple("Push data too large".to_string()));
                     }
                     self.stack.push(data);
                 }
@@ -600,85 +601,91 @@ impl<'a> ScriptExecutor<'a> {
             }
         }
 
-        // Script succeeds if stack is not empty and top element is true
-        Ok(!self.stack.is_empty() && self.is_true(&self.stack[self.stack.len() - 1]))
+        // Script succeeds if it completes without error and either:
+        // - Stack is empty (clean stack), or
+        // - Stack is not empty and top element is true
+        if self.stack.is_empty() {
+            Ok(true)
+        } else {
+            Ok(self.is_true(&self.stack[self.stack.len() - 1]))
+        }
     }
 
     /// Execute a single opcode
-    fn execute_opcode(&mut self, opcode: Opcode) -> Result<()> {
+    fn execute_opcode(&mut self, opcode: OpCode) -> Result<()> {
         match opcode {
             // Constants
-            Opcode::OP_0 => self.stack.push(vec![]),
-            Opcode::OP_1NEGATE => self.stack.push(vec![0x81]), // -1 in script number format
-            Opcode::OP_1 => self.stack.push(vec![0x01]),
-            Opcode::OP_2 => self.stack.push(vec![0x02]),
-            Opcode::OP_3 => self.stack.push(vec![0x03]),
-            Opcode::OP_4 => self.stack.push(vec![0x04]),
-            Opcode::OP_5 => self.stack.push(vec![0x05]),
-            Opcode::OP_6 => self.stack.push(vec![0x06]),
-            Opcode::OP_7 => self.stack.push(vec![0x07]),
-            Opcode::OP_8 => self.stack.push(vec![0x08]),
-            Opcode::OP_9 => self.stack.push(vec![0x09]),
-            Opcode::OP_10 => self.stack.push(vec![0x0a]),
-            Opcode::OP_11 => self.stack.push(vec![0x0b]),
-            Opcode::OP_12 => self.stack.push(vec![0x0c]),
-            Opcode::OP_13 => self.stack.push(vec![0x0d]),
-            Opcode::OP_14 => self.stack.push(vec![0x0e]),
-            Opcode::OP_15 => self.stack.push(vec![0x0f]),
-            Opcode::OP_16 => self.stack.push(vec![0x10]),
+            OpCode::OP_0 => self.stack.push(vec![]),
+            OpCode::OP_1NEGATE => self.stack.push(vec![0x81]), // -1 in script number format
+            OpCode::OP_1 => self.stack.push(vec![0x01]),
+            OpCode::OP_2 => self.stack.push(vec![0x02]),
+            OpCode::OP_3 => self.stack.push(vec![0x03]),
+            OpCode::OP_4 => self.stack.push(vec![0x04]),
+            OpCode::OP_5 => self.stack.push(vec![0x05]),
+            OpCode::OP_6 => self.stack.push(vec![0x06]),
+            OpCode::OP_7 => self.stack.push(vec![0x07]),
+            OpCode::OP_8 => self.stack.push(vec![0x08]),
+            OpCode::OP_9 => self.stack.push(vec![0x09]),
+            OpCode::OP_10 => self.stack.push(vec![0x0a]),
+            OpCode::OP_11 => self.stack.push(vec![0x0b]),
+            OpCode::OP_12 => self.stack.push(vec![0x0c]),
+            OpCode::OP_13 => self.stack.push(vec![0x0d]),
+            OpCode::OP_14 => self.stack.push(vec![0x0e]),
+            OpCode::OP_15 => self.stack.push(vec![0x0f]),
+            OpCode::OP_16 => self.stack.push(vec![0x10]),
 
             // Flow control
-            Opcode::OP_NOP | Opcode::OP_NOP1 | Opcode::OP_NOP4 | Opcode::OP_NOP5 |
-            Opcode::OP_NOP6 | Opcode::OP_NOP7 | Opcode::OP_NOP8 | Opcode::OP_NOP9 | Opcode::OP_NOP10 => {
+            OpCode::OP_NOP | OpCode::OP_NOP1 | OpCode::OP_NOP4 | OpCode::OP_NOP5 |
+            OpCode::OP_NOP6 | OpCode::OP_NOP7 | OpCode::OP_NOP8 | OpCode::OP_NOP9 | OpCode::OP_NOP10 => {
                 // No operation
             }
-            Opcode::OP_VERIFY => {
+            OpCode::OP_VERIFY => {
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let value = self.stack.pop().unwrap();
                 if !self.is_true(&value) {
-                    return Err(GdkError::InvalidInput("OP_VERIFY failed".to_string()));
+                    return Err(GdkError::invalid_input_simple("OP_VERIFY failed".to_string()));
                 }
             }
-            Opcode::OP_RETURN => {
-                return Err(GdkError::InvalidInput("OP_RETURN executed".to_string()));
+            OpCode::OP_RETURN => {
+                return Err(GdkError::invalid_input_simple("OP_RETURN executed".to_string()));
             }
 
             // Stack operations
-            Opcode::OP_TOALTSTACK => {
+            OpCode::OP_TOALTSTACK => {
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let value = self.stack.pop().unwrap();
                 self.alt_stack.push(value);
             }
-            Opcode::OP_FROMALTSTACK => {
+            OpCode::OP_FROMALTSTACK => {
                 if self.alt_stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Alt stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Alt stack underflow".to_string()));
                 }
                 let value = self.alt_stack.pop().unwrap();
                 self.stack.push(value);
             }
-            Opcode::OP_2DROP => {
+            OpCode::OP_2DROP => {
                 if self.stack.len() < 2 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 self.stack.pop();
                 self.stack.pop();
             }
-            Opcode::OP_2DUP => {
+            OpCode::OP_2DUP => {
                 if self.stack.len() < 2 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let a = self.stack[self.stack.len() - 2].clone();
                 let b = self.stack[self.stack.len() - 1].clone();
                 self.stack.push(a);
                 self.stack.push(b);
             }
-            Opcode::OP_3DUP => {
+            OpCode::OP_3DUP => {
                 if self.stack.len() < 3 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let a = self.stack[self.stack.len() - 3].clone();
                 let b = self.stack[self.stack.len() - 2].clone();
@@ -687,18 +694,18 @@ impl<'a> ScriptExecutor<'a> {
                 self.stack.push(b);
                 self.stack.push(c);
             }
-            Opcode::OP_2OVER => {
+            OpCode::OP_2OVER => {
                 if self.stack.len() < 4 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let a = self.stack[self.stack.len() - 4].clone();
                 let b = self.stack[self.stack.len() - 3].clone();
                 self.stack.push(a);
                 self.stack.push(b);
             }
-            Opcode::OP_2ROT => {
+            OpCode::OP_2ROT => {
                 if self.stack.len() < 6 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let len = self.stack.len();
                 let a = self.stack.remove(len - 6);
@@ -706,72 +713,72 @@ impl<'a> ScriptExecutor<'a> {
                 self.stack.push(a);
                 self.stack.push(b);
             }
-            Opcode::OP_2SWAP => {
+            OpCode::OP_2SWAP => {
                 if self.stack.len() < 4 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let len = self.stack.len();
                 self.stack.swap(len - 4, len - 2);
                 self.stack.swap(len - 3, len - 1);
             }
-            Opcode::OP_IFDUP => {
+            OpCode::OP_IFDUP => {
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let value = self.stack[self.stack.len() - 1].clone();
                 if self.is_true(&value) {
                     self.stack.push(value);
                 }
             }
-            Opcode::OP_DEPTH => {
+            OpCode::OP_DEPTH => {
                 let depth = self.stack.len() as u8;
                 self.stack.push(vec![depth]);
             }
-            Opcode::OP_DROP => {
+            OpCode::OP_DROP => {
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 self.stack.pop();
             }
-            Opcode::OP_DUP => {
+            OpCode::OP_DUP => {
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let value = self.stack[self.stack.len() - 1].clone();
                 self.stack.push(value);
             }
-            Opcode::OP_NIP => {
+            OpCode::OP_NIP => {
                 if self.stack.len() < 2 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let len = self.stack.len();
                 self.stack.remove(len - 2);
             }
-            Opcode::OP_OVER => {
+            OpCode::OP_OVER => {
                 if self.stack.len() < 2 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let value = self.stack[self.stack.len() - 2].clone();
                 self.stack.push(value);
             }
-            Opcode::OP_ROT => {
+            OpCode::OP_ROT => {
                 if self.stack.len() < 3 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let len = self.stack.len();
                 let value = self.stack.remove(len - 3);
                 self.stack.push(value);
             }
-            Opcode::OP_SWAP => {
+            OpCode::OP_SWAP => {
                 if self.stack.len() < 2 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let len = self.stack.len();
                 self.stack.swap(len - 2, len - 1);
             }
-            Opcode::OP_TUCK => {
+            OpCode::OP_TUCK => {
                 if self.stack.len() < 2 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let value = self.stack[self.stack.len() - 1].clone();
                 let len = self.stack.len();
@@ -779,54 +786,54 @@ impl<'a> ScriptExecutor<'a> {
             }
 
             // Bitwise logic
-            Opcode::OP_EQUAL => {
+            OpCode::OP_EQUAL => {
                 if self.stack.len() < 2 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let b = self.stack.pop().unwrap();
                 let a = self.stack.pop().unwrap();
                 let result = if a == b { vec![1] } else { vec![] };
                 self.stack.push(result);
             }
-            Opcode::OP_EQUALVERIFY => {
+            OpCode::OP_EQUALVERIFY => {
                 if self.stack.len() < 2 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let b = self.stack.pop().unwrap();
                 let a = self.stack.pop().unwrap();
                 if a != b {
-                    return Err(GdkError::InvalidInput("OP_EQUALVERIFY failed".to_string()));
+                    return Err(GdkError::invalid_input_simple("OP_EQUALVERIFY failed".to_string()));
                 }
             }
 
             // Crypto operations
-            Opcode::OP_SHA256 => {
+            OpCode::OP_SHA256 => {
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let data = self.stack.pop().unwrap();
                 let hash = sha256(&data);
                 self.stack.push(hash.to_vec());
             }
-            Opcode::OP_HASH160 => {
+            OpCode::OP_HASH160 => {
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let data = self.stack.pop().unwrap();
                 let hash = hash160(&data);
                 self.stack.push(hash.to_vec());
             }
-            Opcode::OP_HASH256 => {
+            OpCode::OP_HASH256 => {
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let data = self.stack.pop().unwrap();
                 let hash = sha256d(&data);
                 self.stack.push(hash.to_vec());
             }
-            Opcode::OP_CHECKSIG => {
+            OpCode::OP_CHECKSIG => {
                 if self.stack.len() < 2 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let pubkey = self.stack.pop().unwrap();
                 let signature = self.stack.pop().unwrap();
@@ -841,9 +848,9 @@ impl<'a> ScriptExecutor<'a> {
                 
                 self.stack.push(if result { vec![1] } else { vec![] });
             }
-            Opcode::OP_CHECKSIGVERIFY => {
+            OpCode::OP_CHECKSIGVERIFY => {
                 if self.stack.len() < 2 {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 let pubkey = self.stack.pop().unwrap();
                 let signature = self.stack.pop().unwrap();
@@ -855,22 +862,22 @@ impl<'a> ScriptExecutor<'a> {
                 };
                 
                 if !result {
-                    return Err(GdkError::InvalidInput("OP_CHECKSIGVERIFY failed".to_string()));
+                    return Err(GdkError::invalid_input_simple("OP_CHECKSIGVERIFY failed".to_string()));
                 }
             }
-            Opcode::OP_CHECKMULTISIG => {
+            OpCode::OP_CHECKMULTISIG => {
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 
                 let n_bytes = self.stack.pop().unwrap();
                 let n = self.script_num_to_int(&n_bytes)?;
                 if n < 0 || n > 20 {
-                    return Err(GdkError::InvalidInput("Invalid pubkey count".to_string()));
+                    return Err(GdkError::invalid_input_simple("Invalid pubkey count".to_string()));
                 }
                 
                 if self.stack.len() < n as usize {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 
                 let mut pubkeys = Vec::new();
@@ -879,17 +886,17 @@ impl<'a> ScriptExecutor<'a> {
                 }
                 
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 
                 let m_bytes = self.stack.pop().unwrap();
                 let m = self.script_num_to_int(&m_bytes)?;
                 if m < 0 || m > n {
-                    return Err(GdkError::InvalidInput("Invalid signature count".to_string()));
+                    return Err(GdkError::invalid_input_simple("Invalid signature count".to_string()));
                 }
                 
                 if self.stack.len() < m as usize {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 
                 let mut signatures = Vec::new();
@@ -899,7 +906,7 @@ impl<'a> ScriptExecutor<'a> {
                 
                 // Remove extra value due to off-by-one bug in original implementation
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 self.stack.pop();
                 
@@ -909,52 +916,52 @@ impl<'a> ScriptExecutor<'a> {
             }
 
             // Timelock operations
-            Opcode::OP_CHECKLOCKTIMEVERIFY => {
+            OpCode::OP_CHECKLOCKTIMEVERIFY => {
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 
                 let locktime = self.script_num_to_int(&self.stack[self.stack.len() - 1])?;
                 
                 if let Some(ctx) = self.tx_context {
                     if locktime < 0 {
-                        return Err(GdkError::InvalidInput("Negative locktime".to_string()));
+                        return Err(GdkError::invalid_input_simple("Negative locktime".to_string()));
                     }
                     
                     // Simplified locktime check
                     if ctx.lock_time < locktime as u32 {
-                        return Err(GdkError::InvalidInput("Locktime not satisfied".to_string()));
+                        return Err(GdkError::invalid_input_simple("Locktime not satisfied".to_string()));
                     }
                 }
             }
-            Opcode::OP_CHECKSEQUENCEVERIFY => {
+            OpCode::OP_CHECKSEQUENCEVERIFY => {
                 if self.stack.is_empty() {
-                    return Err(GdkError::InvalidInput("Stack underflow".to_string()));
+                    return Err(GdkError::invalid_input_simple("Stack underflow".to_string()));
                 }
                 
                 let sequence = self.script_num_to_int(&self.stack[self.stack.len() - 1])?;
                 
                 if let Some(ctx) = self.tx_context {
                     if sequence < 0 {
-                        return Err(GdkError::InvalidInput("Negative sequence".to_string()));
+                        return Err(GdkError::invalid_input_simple("Negative sequence".to_string()));
                     }
                     
                     // Simplified sequence check
                     if ctx.sequence < sequence as u32 {
-                        return Err(GdkError::InvalidInput("Sequence not satisfied".to_string()));
+                        return Err(GdkError::invalid_input_simple("Sequence not satisfied".to_string()));
                     }
                 }
             }
 
             // Disabled or invalid opcodes
-            Opcode::OP_RESERVED | Opcode::OP_VER | Opcode::OP_VERIF | Opcode::OP_VERNOTIF |
-            Opcode::OP_RESERVED1 | Opcode::OP_RESERVED2 | Opcode::OP_INVALIDOPCODE => {
-                return Err(GdkError::InvalidInput("Invalid opcode".to_string()));
+            OpCode::OP_RESERVED | OpCode::OP_VER | OpCode::OP_VERIF | OpCode::OP_VERNOTIF |
+            OpCode::OP_RESERVED1 | OpCode::OP_RESERVED2 | OpCode::OP_INVALIDOPCODE => {
+                return Err(GdkError::invalid_input_simple("Invalid opcode".to_string()));
             }
 
             // Unimplemented opcodes (would need full implementation)
             _ => {
-                return Err(GdkError::InvalidInput(format!("Unimplemented opcode: {:?}", opcode)));
+                return Err(GdkError::invalid_input_simple(format!("Unimplemented opcode: {:?}", opcode)));
             }
         }
 
@@ -989,7 +996,7 @@ impl<'a> ScriptExecutor<'a> {
         }
         
         if data.len() > 4 {
-            return Err(GdkError::InvalidInput("Script number too long".to_string()));
+            return Err(GdkError::invalid_input_simple("Script number too long".to_string()));
         }
         
         let mut result = 0i64;
@@ -1038,11 +1045,11 @@ mod tests {
         let instructions = p2pkh_script.instructions().unwrap();
         
         assert_eq!(instructions.len(), 5);
-        assert_eq!(instructions[0], Instruction::Op(Opcode::OP_DUP));
-        assert_eq!(instructions[1], Instruction::Op(Opcode::OP_HASH160));
+        assert_eq!(instructions[0], Instruction::Op(OpCode::OP_DUP));
+        assert_eq!(instructions[1], Instruction::Op(OpCode::OP_HASH160));
         assert_eq!(instructions[2], Instruction::PushBytes(vec![0x12; 20]));
-        assert_eq!(instructions[3], Instruction::Op(Opcode::OP_EQUALVERIFY));
-        assert_eq!(instructions[4], Instruction::Op(Opcode::OP_CHECKSIG));
+        assert_eq!(instructions[3], Instruction::Op(OpCode::OP_EQUALVERIFY));
+        assert_eq!(instructions[4], Instruction::Op(OpCode::OP_CHECKSIG));
     }
 
     #[test]
@@ -1251,9 +1258,7 @@ mod tests {
     #[test]
     fn test_script_execution_multisig() {
         // Test simple 1-of-2 multisig
-        let mut signature = vec![0x30, 0x44]; // Simplified signature
-        signature.extend_from_slice(&[0x12; 66]);
-        
+        // Script: OP_1 <pubkey1> <pubkey2> OP_2 OP_CHECKMULTISIG
         let mut pubkey1 = vec![0x02];
         pubkey1.extend_from_slice(&[0x11; 32]);
         let mut pubkey2 = vec![0x03];
@@ -1261,20 +1266,28 @@ mod tests {
         
         let mut script_bytes = vec![];
         script_bytes.push(0x51); // OP_1 (m = 1)
-        script_bytes.push(signature.len() as u8);
-        script_bytes.extend_from_slice(&signature);
-        script_bytes.push(0x52); // OP_2 (n = 2)
         script_bytes.push(pubkey1.len() as u8);
         script_bytes.extend_from_slice(&pubkey1);
         script_bytes.push(pubkey2.len() as u8);
         script_bytes.extend_from_slice(&pubkey2);
+        script_bytes.push(0x52); // OP_2 (n = 2)
         script_bytes.push(0xae); // OP_CHECKMULTISIG
         
         let script = Script(script_bytes);
-        let mut stack = vec![vec![]]; // Extra value for off-by-one bug
+        
+        // Stack: <extra-value> <signature>
+        let mut signature = vec![0x30, 0x44]; // Simplified signature
+        signature.extend_from_slice(&[0x12; 66]);
+        
+        let mut stack = vec![
+            vec![],  // Extra value for off-by-one bug
+            signature,  // The signature
+        ];
         
         let result = script.execute(&mut stack, None);
         assert!(result.is_ok());
+        assert_eq!(stack.len(), 1);
+        assert_eq!(stack[0], vec![1]); // True
     }
 
     #[test]

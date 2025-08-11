@@ -1,4 +1,3 @@
-use gdk_rs::*;
 use gdk_rs::utils::*;
 
 #[test]

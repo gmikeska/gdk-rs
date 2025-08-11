@@ -3,7 +3,7 @@
 use super::encode::{Encodable, Decodable, write_varint, read_varint};
 use super::hash::{sha256, Hash256};
 use super::script::Script;
-use super::transaction::{OutPoint, TxIn};
+use super::transaction::TxIn;
 use crate::{Result, GdkError};
 use serde::{Deserialize, Serialize};
 use serde_with::{serde_as, Bytes};
@@ -127,7 +127,7 @@ impl Decodable for ConfidentialAsset {
                 reader.read_exact(&mut commitment[1..])?;
                 Ok(ConfidentialAsset::Confidential(commitment))
             }
-            _ => Err(GdkError::InvalidInput(format!("Invalid asset prefix: {:#x}", prefix[0]))),
+            _ => Err(GdkError::invalid_input_simple(format!("Invalid asset prefix: {:#x}", prefix[0]))),
         }
     }
 }
@@ -210,7 +210,7 @@ impl Decodable for ConfidentialValue {
                 reader.read_exact(&mut commitment[1..])?;
                 Ok(ConfidentialValue::Confidential(commitment))
             }
-            _ => Err(GdkError::InvalidInput(format!("Invalid value prefix: {:#x}", prefix[0]))),
+            _ => Err(GdkError::invalid_input_simple(format!("Invalid value prefix: {:#x}", prefix[0]))),
         }
     }
 }
@@ -277,7 +277,7 @@ impl Decodable for ConfidentialNonce {
                 reader.read_exact(&mut commitment[1..])?;
                 Ok(ConfidentialNonce::Confidential(commitment))
             }
-            _ => Err(GdkError::InvalidInput(format!("Invalid nonce prefix: {:#x}", prefix[0]))),
+            _ => Err(GdkError::invalid_input_simple(format!("Invalid nonce prefix: {:#x}", prefix[0]))),
         }
     }
 }
@@ -622,7 +622,7 @@ impl Decodable for ConfidentialTransaction {
                 let input = Vec::<TxIn>::consensus_decode(reader)?;
                 (input, true)
             } else {
-                return Err(GdkError::InvalidInput("Invalid witness flag".to_string()));
+                return Err(GdkError::invalid_input_simple("Invalid witness flag".to_string()));
             }
         } else {
             // This is a legacy transaction, first_byte[0] is the start of input count varint
@@ -641,7 +641,7 @@ impl Decodable for ConfidentialTransaction {
                 reader.read_exact(&mut buf)?;
                 u64::from_le_bytes(buf)
             } else {
-                return Err(GdkError::InvalidInput("Invalid varint".to_string()));
+                return Err(GdkError::invalid_input_simple("Invalid varint".to_string()));
             };
             
             let mut input = Vec::with_capacity(input_count as usize);
@@ -861,11 +861,11 @@ pub mod confidential {
         
         // Validate inputs
         if value < min_value {
-            return Err(GdkError::InvalidInput("Value below minimum".to_string()));
+            return Err(GdkError::invalid_input_simple("Value below minimum".to_string()));
         }
         
         if min_bits > 64 {
-            return Err(GdkError::InvalidInput("min_bits too large".to_string()));
+            return Err(GdkError::invalid_input_simple("min_bits too large".to_string()));
         }
         
         // Generate a structured proof that includes cryptographic commitments
@@ -937,7 +937,7 @@ pub mod confidential {
         // Real surjection proofs require proper zero-knowledge proof systems
         
         if input_assets.len() != input_asset_blinding_factors.len() {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Input assets and blinding factors length mismatch".to_string()
             ));
         }
@@ -1035,7 +1035,7 @@ pub mod confidential {
         // 3. Verify the range and surjection proofs
         
         // This is a simplified placeholder that returns dummy values
-        Err(GdkError::InvalidInput(
+        Err(GdkError::invalid_input_simple(
             "Unblinding not implemented for confidential outputs".to_string()
         ))
     }
@@ -1106,11 +1106,11 @@ pub mod confidential {
     pub fn validate_confidential_transaction(tx: &ConfidentialTransaction) -> Result<bool> {
         // Basic validation checks
         if tx.input.is_empty() {
-            return Err(GdkError::InvalidInput("Transaction has no inputs".to_string()));
+            return Err(GdkError::invalid_input_simple("Transaction has no inputs".to_string()));
         }
         
         if tx.output.is_empty() {
-            return Err(GdkError::InvalidInput("Transaction has no outputs".to_string()));
+            return Err(GdkError::invalid_input_simple("Transaction has no outputs".to_string()));
         }
         
         // Validate each output
@@ -1118,13 +1118,13 @@ pub mod confidential {
             // Check that confidential outputs have proper witness data
             if output.is_confidential() {
                 if output.witness.range_proof.is_empty() {
-                    return Err(GdkError::InvalidInput(
+                    return Err(GdkError::invalid_input_simple(
                         format!("Confidential output {} missing range proof", i)
                     ));
                 }
                 
                 if output.witness.surjection_proof.is_empty() {
-                    return Err(GdkError::InvalidInput(
+                    return Err(GdkError::invalid_input_simple(
                         format!("Confidential output {} missing surjection proof", i)
                     ));
                 }
@@ -1140,7 +1140,7 @@ pub mod confidential {
                         0, // exp
                         52, // min_bits
                     )? {
-                        return Err(GdkError::InvalidInput(
+                        return Err(GdkError::invalid_input_simple(
                             format!("Invalid range proof for output {}", i)
                         ));
                     }
@@ -1252,7 +1252,7 @@ impl TransactionBlinder {
         output_blinding_keys: &[Option<BlindingKey>],
     ) -> Result<ConfidentialTransaction> {
         if tx.output.len() != output_blinding_keys.len() {
-            return Err(GdkError::InvalidInput(
+            return Err(GdkError::invalid_input_simple(
                 "Number of outputs and blinding keys must match".to_string()
             ));
         }

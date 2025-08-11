@@ -2,7 +2,6 @@
 
 use sha2::{Digest, Sha256};
 use ripemd::{Ripemd160};
-use serde::{Deserialize, Serialize};
 
 /// A 256-bit hash
 pub type Hash256 = [u8; 32];

@@ -2,8 +2,7 @@
 
 use crate::error::GdkError;
 use crate::protocol::{
-    JsonRpcRequest, JsonRpcResponse, JsonRpcBatchRequest, JsonRpcBatchResponse, 
-    JsonRpcError, PendingRequest, MethodValidator, JSONRPC_VERSION
+    JsonRpcRequest, JsonRpcResponse, JsonRpcBatchRequest, JsonRpcBatchResponse, PendingRequest, MethodValidator
 };
 use crate::Result;
 use serde_json::Value;
@@ -11,7 +10,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot, Mutex, RwLock};
-use tokio::time::{interval, timeout, sleep};
+use tokio::time::{interval, timeout};
 use uuid::Uuid;
 
 /// Configuration for JSON-RPC client behavior
@@ -173,7 +172,7 @@ impl JsonRpcClient {
             }
         }
 
-        Err(last_error.unwrap_or_else(|| GdkError::Network("All retry attempts failed".to_string())))
+        Err(last_error.unwrap_or_else(|| GdkError::network_simple("All retry attempts failed".to_string())))
     }
 
     /// Send a JSON-RPC request with custom timeout
@@ -214,7 +213,7 @@ impl JsonRpcClient {
 
         // Send request to batching task
         if self.request_tx.send(request).await.is_err() {
-            return Err(GdkError::Network("JSON-RPC client task has died".to_string()));
+            return Err(GdkError::network_simple("JSON-RPC client task has died".to_string()));
         }
 
         // Wait for response with timeout
@@ -225,14 +224,14 @@ impl JsonRpcClient {
             }
             Ok(Err(_)) => {
                 self.update_stats_error().await;
-                Err(GdkError::Network("Response channel closed".to_string()))
+                Err(GdkError::network_simple("Response channel closed".to_string()))
             }
             Err(_) => {
                 self.update_stats_timeout().await;
                 // Clean up pending request
                 let mut pending = self.pending_requests.lock().await;
                 pending.remove(id.as_str().unwrap());
-                Err(GdkError::Network("Request timeout".to_string()))
+                Err(GdkError::network_simple("Request timeout".to_string()))
             }
         }
     }
@@ -249,7 +248,7 @@ impl JsonRpcClient {
         batch.add_request(request);
 
         if self.batch_tx.send(batch).await.is_err() {
-            return Err(GdkError::Network("Failed to send notification".to_string()));
+            return Err(GdkError::network_simple("Failed to send notification".to_string()));
         }
 
         Ok(())
@@ -271,7 +270,7 @@ impl JsonRpcClient {
             return Ok(());
         }
 
-        Err(GdkError::Network("Invalid JSON-RPC response format".to_string()))
+        Err(GdkError::network_simple("Invalid JSON-RPC response format".to_string()))
     }
 
     /// Handle a single JSON-RPC response
@@ -405,7 +404,7 @@ async fn send_batch(
     }
 
     if batch_tx.send(json_batch).await.is_err() {
-        return Err(GdkError::Network("Failed to send batch request".to_string()));
+        return Err(GdkError::network_simple("Failed to send batch request".to_string()));
     }
 
     *batch = PendingBatch::new();
@@ -441,7 +440,7 @@ fn start_timeout_cleanup_task(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use tokio::sync::mpsc;
+    use crate::protocol::JSONRPC_VERSION;
 
     #[tokio::test]
     async fn test_jsonrpc_config_defaults() {

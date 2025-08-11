@@ -111,7 +111,9 @@ pub mod wallet;
 // pub mod wallet_simple; // Not implemented yet
 pub mod bip39;
 pub mod api;
+#[cfg(feature = "liquid-network")]
 pub mod assets;
+#[cfg(feature = "hardware-wallets")]
 pub mod hw;
 pub mod utils;
 pub mod protocol;

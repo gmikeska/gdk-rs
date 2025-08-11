@@ -7,4 +7,5 @@ pub mod script;
 pub mod address;
 pub mod psbt;
 pub mod bip32;
+#[cfg(feature = "liquid-network")]
 pub mod liquid;

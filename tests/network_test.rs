@@ -84,7 +84,7 @@ async fn test_compression_feature_enabled() {
 #[tokio::test]
 async fn test_connection_state_transitions() {
     // Test that connection states are properly defined
-    let states = vec![
+    let _states = vec![
         ConnectionState::Disconnected,
         ConnectionState::Connecting,
         ConnectionState::Connected,
@@ -114,18 +114,18 @@ async fn test_connection_health_default() {
 
 #[tokio::test]
 async fn test_notification_channel_creation() {
-    let (tx, mut rx) = broadcast::channel::<Notification>(100);
+    let (tx, rx) = broadcast::channel::<Notification>(100);
     
     // Test that we can create the channel without issues
     assert_eq!(tx.receiver_count(), 1);
     
     // Test that receiver can be created
-    let _rx2 = tx.subscribe();
+    let rx2 = tx.subscribe();
     assert_eq!(tx.receiver_count(), 2);
     
     // Test channel capacity
     drop(rx);
-    drop(_rx2);
+    drop(rx2);
     assert_eq!(tx.receiver_count(), 0);
 }
 
@@ -390,12 +390,63 @@ async fn test_jsonrpc_error_conversion() {
     let gdk_error: GdkError = json_error.into();
     
     match gdk_error {
-        GdkError::Network(msg) => {
-            assert!(msg.contains("JSON-RPC Error"));
-            assert!(msg.contains("-32601"));
-            assert!(msg.contains("Method not found"));
+        GdkError::Network { message, .. } => {
+            assert!(message.contains("JSON-RPC Error"));
+            assert!(message.contains("-32601"));
+            assert!(message.contains("Method not found"));
         }
         _ => panic!("Expected Network error"),
+    }
+}
+
+#[tokio::test]
+async fn test_all_jsonrpc_error_conversions() {
+    use gdk_rs::error::GdkError;
+    
+    // Test all standard JSON-RPC error types
+    let test_cases = vec![
+        (JsonRpcError::parse_error(), "-32700", "Parse error"),
+        (JsonRpcError::invalid_request(), "-32600", "Invalid Request"),
+        (JsonRpcError::method_not_found(), "-32601", "Method not found"),
+        (JsonRpcError::invalid_params(), "-32602", "Invalid params"),
+        (JsonRpcError::internal_error(), "-32603", "Internal error"),
+    ];
+    
+    for (json_error, expected_code, expected_message) in test_cases {
+        let gdk_error: GdkError = json_error.into();
+        
+        match gdk_error {
+            GdkError::Network { message, code, .. } => {
+                assert!(message.contains("JSON-RPC Error"));
+                assert!(message.contains(expected_code));
+                assert!(message.contains(expected_message));
+                // Verify the error code is NetworkConnectionFailed (as set by network_simple)
+                assert_eq!(code, gdk_rs::error::GdkErrorCode::NetworkConnectionFailed);
+            }
+            _ => panic!("Expected Network error variant"),
+        }
+    }
+}
+
+#[tokio::test]
+async fn test_custom_jsonrpc_error_conversion() {
+    use gdk_rs::error::GdkError;
+    
+    let custom_error = JsonRpcError::custom(
+        -32000,
+        "Custom error message".to_string(),
+        Some(json!({"detail": "Additional information"}))
+    );
+    
+    let gdk_error: GdkError = custom_error.into();
+    
+    match gdk_error {
+        GdkError::Network { message, .. } => {
+            assert!(message.contains("JSON-RPC Error"));
+            assert!(message.contains("-32000"));
+            assert!(message.contains("Custom error message"));
+        }
+        _ => panic!("Expected Network error variant"),
     }
 }
 

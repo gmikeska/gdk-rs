@@ -1,6 +1,6 @@
 use gdk_rs::{
     protocol::{
-        Addressee, CreateTransactionParams, GetAssetsParams, GetTransactionsParams,
+        CreateTransactionParams, GetAssetsParams, GetTransactionsParams,
         GetUnspentOutputsParams, LoginCredentials,
     },
     types::{ConnectParams, GdkConfig},
@@ -15,10 +15,16 @@ async fn get_connected_session() -> (Session, std::net::SocketAddr) {
     let mut session = Session::new(config);
     let connect_params = ConnectParams {
         chain_id: "localtest".to_string(),
+        name: None,
         user_agent: None,
         use_proxy: false,
         proxy: None,
         tor_enabled: false,
+        use_tor: false,
+        spv_enabled: false,
+        min_fee_rate: None,
+        electrum_url: None,
+        electrum_tls: false,
     };
     let url = format!("ws://{}/v2/ws", server_addr);
     session.connect(&connect_params, &[url]).await.unwrap();

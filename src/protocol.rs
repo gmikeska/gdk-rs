@@ -146,7 +146,7 @@ impl JsonRpcError {
 
 impl From<JsonRpcError> for GdkError {
     fn from(error: JsonRpcError) -> Self {
-        GdkError::Network(format!("JSON-RPC Error {}: {}", error.code, error.message))
+        GdkError::network_simple(format!("JSON-RPC Error {}: {}", error.code, error.message))
     }
 }
 
@@ -207,16 +207,16 @@ impl MethodValidator {
     /// Validate method name according to JSON-RPC 2.0 specification
     pub fn validate_method_name(method: &str) -> Result<()> {
         if method.is_empty() {
-            return Err(GdkError::InvalidInput("Method name cannot be empty".to_string()));
+            return Err(GdkError::invalid_input_simple("Method name cannot be empty".to_string()));
         }
 
         if method.starts_with("rpc.") {
-            return Err(GdkError::InvalidInput("Method names starting with 'rpc.' are reserved".to_string()));
+            return Err(GdkError::invalid_input_simple("Method names starting with 'rpc.' are reserved".to_string()));
         }
 
         // Check for valid characters (alphanumeric, underscore, dot, hyphen)
         if !method.chars().all(|c| c.is_alphanumeric() || c == '_' || c == '.' || c == '-') {
-            return Err(GdkError::InvalidInput("Method name contains invalid characters".to_string()));
+            return Err(GdkError::invalid_input_simple("Method name contains invalid characters".to_string()));
         }
 
         Ok(())
@@ -227,7 +227,7 @@ impl MethodValidator {
         if let Some(params) = params {
             match params {
                 serde_json::Value::Object(_) | serde_json::Value::Array(_) => Ok(()),
-                _ => Err(GdkError::InvalidInput("Parameters must be an Object or Array".to_string())),
+                _ => Err(GdkError::invalid_input_simple("Parameters must be an Object or Array".to_string())),
             }
         } else {
             Ok(())

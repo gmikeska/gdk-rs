@@ -111,7 +111,7 @@ impl PartiallySignedTransaction {
     /// Get the unsigned transaction
     pub fn unsigned_tx(&self) -> Result<&Transaction> {
         self.global.unsigned_tx.as_ref()
-            .ok_or_else(|| GdkError::InvalidInput("PSBT missing unsigned transaction".to_string()))
+            .ok_or_else(|| GdkError::invalid_input_simple("PSBT missing unsigned transaction".to_string()))
     }
 
     /// Check if the PSBT is complete (all inputs have final scripts)
@@ -124,7 +124,7 @@ impl PartiallySignedTransaction {
     /// Extract the final transaction if the PSBT is complete
     pub fn extract_tx(&self) -> Result<Transaction> {
         if !self.is_complete() {
-            return Err(GdkError::InvalidInput("PSBT is not complete".to_string()));
+            return Err(GdkError::invalid_input_simple("PSBT is not complete".to_string()));
         }
 
         let mut tx = self.unsigned_tx()?.clone();
@@ -144,7 +144,7 @@ impl PartiallySignedTransaction {
     /// Add a signature to an input
     pub fn add_signature(&mut self, input_index: usize, pubkey: PublicKey, signature: Vec<u8>) -> Result<()> {
         if input_index >= self.inputs.len() {
-            return Err(GdkError::InvalidInput("Input index out of bounds".to_string()));
+            return Err(GdkError::invalid_input_simple("Input index out of bounds".to_string()));
         }
 
         self.inputs[input_index].partial_sigs.insert(pubkey, signature);
@@ -155,7 +155,7 @@ impl PartiallySignedTransaction {
     pub fn combine(&mut self, other: &PartiallySignedTransaction) -> Result<()> {
         // Check that the unsigned transactions match
         if self.unsigned_tx()? != other.unsigned_tx()? {
-            return Err(GdkError::InvalidInput("Cannot combine PSBTs with different unsigned transactions".to_string()));
+            return Err(GdkError::invalid_input_simple("Cannot combine PSBTs with different unsigned transactions".to_string()));
         }
 
         // Combine global data
@@ -267,7 +267,7 @@ impl PartiallySignedTransaction {
     /// Finalize an input by converting partial signatures to final scripts
     pub fn finalize_input(&mut self, input_index: usize) -> Result<()> {
         if input_index >= self.inputs.len() {
-            return Err(GdkError::InvalidInput("Input index out of bounds".to_string()));
+            return Err(GdkError::invalid_input_simple("Input index out of bounds".to_string()));
         }
 
         let input = &mut self.inputs[input_index];
@@ -294,20 +294,20 @@ impl PartiallySignedTransaction {
 
         // Check that input and output counts match
         if self.inputs.len() != unsigned_tx.input.len() {
-            return Err(GdkError::InvalidInput("PSBT input count doesn't match transaction".to_string()));
+            return Err(GdkError::invalid_input_simple("PSBT input count doesn't match transaction".to_string()));
         }
 
         if self.outputs.len() != unsigned_tx.output.len() {
-            return Err(GdkError::InvalidInput("PSBT output count doesn't match transaction".to_string()));
+            return Err(GdkError::invalid_input_simple("PSBT output count doesn't match transaction".to_string()));
         }
 
         // Validate that the unsigned transaction has empty scriptSigs and witnesses
         for input in &unsigned_tx.input {
             if !input.script_sig.is_empty() {
-                return Err(GdkError::InvalidInput("Unsigned transaction must have empty scriptSigs".to_string()));
+                return Err(GdkError::invalid_input_simple("Unsigned transaction must have empty scriptSigs".to_string()));
             }
             if !input.witness.is_empty() {
-                return Err(GdkError::InvalidInput("Unsigned transaction must have empty witnesses".to_string()));
+                return Err(GdkError::invalid_input_simple("Unsigned transaction must have empty witnesses".to_string()));
             }
         }
 
@@ -347,14 +347,14 @@ impl PartiallySignedTransaction {
         let mut magic = [0u8; 4];
         cursor.read_exact(&mut magic)?;
         if &magic != PSBT_MAGIC {
-            return Err(GdkError::InvalidInput("Invalid PSBT magic bytes".to_string()));
+            return Err(GdkError::invalid_input_simple("Invalid PSBT magic bytes".to_string()));
         }
 
         // Check separator
         let mut separator = [0u8; 1];
         cursor.read_exact(&mut separator)?;
         if separator[0] != PSBT_SEPARATOR {
-            return Err(GdkError::InvalidInput("Invalid PSBT separator".to_string()));
+            return Err(GdkError::invalid_input_simple("Invalid PSBT separator".to_string()));
         }
 
         // Deserialize global data
@@ -362,7 +362,7 @@ impl PartiallySignedTransaction {
 
         // Get transaction to determine input/output counts
         let unsigned_tx = global.unsigned_tx.as_ref()
-            .ok_or_else(|| GdkError::InvalidInput("PSBT missing unsigned transaction".to_string()))?;
+            .ok_or_else(|| GdkError::invalid_input_simple("PSBT missing unsigned transaction".to_string()))?;
 
         // Deserialize inputs
         let mut inputs = Vec::new();
@@ -578,19 +578,19 @@ impl PartiallySignedTransaction {
             match key[0] {
                 PSBT_GLOBAL_UNSIGNED_TX => {
                     if key.len() != 1 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT global unsigned tx key".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT global unsigned tx key".to_string()));
                     }
                     global.unsigned_tx = Some(Transaction::consensus_decode_from_slice(&value)?);
                 }
                 PSBT_GLOBAL_XPUB => {
                     if key.len() != 34 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT global xpub key length".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT global xpub key length".to_string()));
                     }
                     let pubkey = PublicKey::from_slice(&key[1..34])
-                        .map_err(|e| GdkError::InvalidInput(format!("Invalid public key: {}", e)))?;
+                        .map_err(|e| GdkError::invalid_input_simple(format!("Invalid public key: {}", e)))?;
                     
                     if value.len() < 4 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT xpub value length".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT xpub value length".to_string()));
                     }
                     
                     let mut fingerprint = [0u8; 4];
@@ -598,7 +598,7 @@ impl PartiallySignedTransaction {
                     
                     let path_data = &value[4..];
                     if path_data.len() % 4 != 0 {
-                        return Err(GdkError::InvalidInput("Invalid derivation path length".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid derivation path length".to_string()));
                     }
                     
                     let mut path = Vec::new();
@@ -619,7 +619,7 @@ impl PartiallySignedTransaction {
                 }
                 PSBT_GLOBAL_VERSION => {
                     if key.len() != 1 || value.len() != 4 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT version field".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT version field".to_string()));
                     }
                     global.version = Some(u32::from_le_bytes([value[0], value[1], value[2], value[3]]));
                 }
@@ -654,51 +654,51 @@ impl PartiallySignedTransaction {
             match key[0] {
                 PSBT_IN_NON_WITNESS_UTXO => {
                     if key.len() != 1 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT input non-witness UTXO key".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT input non-witness UTXO key".to_string()));
                     }
                     input.non_witness_utxo = Some(Transaction::consensus_decode_from_slice(&value)?);
                 }
                 PSBT_IN_WITNESS_UTXO => {
                     if key.len() != 1 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT input witness UTXO key".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT input witness UTXO key".to_string()));
                     }
                     input.witness_utxo = Some(TxOut::consensus_decode_from_slice(&value)?);
                 }
                 PSBT_IN_PARTIAL_SIG => {
                     if key.len() != 34 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT input partial sig key length".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT input partial sig key length".to_string()));
                     }
                     let pubkey = PublicKey::from_slice(&key[1..34])
-                        .map_err(|e| GdkError::InvalidInput(format!("Invalid public key: {}", e)))?;
+                        .map_err(|e| GdkError::invalid_input_simple(format!("Invalid public key: {}", e)))?;
                     input.partial_sigs.insert(pubkey, value);
                 }
                 PSBT_IN_SIGHASH_TYPE => {
                     if key.len() != 1 || value.len() != 4 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT sighash type field".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT sighash type field".to_string()));
                     }
                     input.sighash_type = Some(u32::from_le_bytes([value[0], value[1], value[2], value[3]]));
                 }
                 PSBT_IN_REDEEM_SCRIPT => {
                     if key.len() != 1 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT input redeem script key".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT input redeem script key".to_string()));
                     }
                     input.redeem_script = Some(Script::from_bytes(value));
                 }
                 PSBT_IN_WITNESS_SCRIPT => {
                     if key.len() != 1 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT input witness script key".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT input witness script key".to_string()));
                     }
                     input.witness_script = Some(Script::from_bytes(value));
                 }
                 PSBT_IN_BIP32_DERIVATION => {
                     if key.len() != 34 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT input BIP32 derivation key length".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT input BIP32 derivation key length".to_string()));
                     }
                     let pubkey = PublicKey::from_slice(&key[1..34])
-                        .map_err(|e| GdkError::InvalidInput(format!("Invalid public key: {}", e)))?;
+                        .map_err(|e| GdkError::invalid_input_simple(format!("Invalid public key: {}", e)))?;
                     
                     if value.len() < 4 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT BIP32 derivation value length".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT BIP32 derivation value length".to_string()));
                     }
                     
                     let mut fingerprint = [0u8; 4];
@@ -706,7 +706,7 @@ impl PartiallySignedTransaction {
                     
                     let path_data = &value[4..];
                     if path_data.len() % 4 != 0 {
-                        return Err(GdkError::InvalidInput("Invalid derivation path length".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid derivation path length".to_string()));
                     }
                     
                     let mut path = Vec::new();
@@ -724,13 +724,13 @@ impl PartiallySignedTransaction {
                 }
                 PSBT_IN_FINAL_SCRIPTSIG => {
                     if key.len() != 1 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT input final scriptSig key".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT input final scriptSig key".to_string()));
                     }
                     input.final_script_sig = Some(Script::from_bytes(value));
                 }
                 PSBT_IN_FINAL_SCRIPTWITNESS => {
                     if key.len() != 1 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT input final script witness key".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT input final script witness key".to_string()));
                     }
                     let mut cursor = Cursor::new(&value);
                     let witness_len = read_varint(&mut cursor)?;
@@ -774,25 +774,25 @@ impl PartiallySignedTransaction {
             match key[0] {
                 PSBT_OUT_REDEEM_SCRIPT => {
                     if key.len() != 1 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT output redeem script key".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT output redeem script key".to_string()));
                     }
                     output.redeem_script = Some(Script::from_bytes(value));
                 }
                 PSBT_OUT_WITNESS_SCRIPT => {
                     if key.len() != 1 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT output witness script key".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT output witness script key".to_string()));
                     }
                     output.witness_script = Some(Script::from_bytes(value));
                 }
                 PSBT_OUT_BIP32_DERIVATION => {
                     if key.len() != 34 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT output BIP32 derivation key length".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT output BIP32 derivation key length".to_string()));
                     }
                     let pubkey = PublicKey::from_slice(&key[1..34])
-                        .map_err(|e| GdkError::InvalidInput(format!("Invalid public key: {}", e)))?;
+                        .map_err(|e| GdkError::invalid_input_simple(format!("Invalid public key: {}", e)))?;
                     
                     if value.len() < 4 {
-                        return Err(GdkError::InvalidInput("Invalid PSBT BIP32 derivation value length".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid PSBT BIP32 derivation value length".to_string()));
                     }
                     
                     let mut fingerprint = [0u8; 4];
@@ -800,7 +800,7 @@ impl PartiallySignedTransaction {
                     
                     let path_data = &value[4..];
                     if path_data.len() % 4 != 0 {
-                        return Err(GdkError::InvalidInput("Invalid derivation path length".to_string()));
+                        return Err(GdkError::invalid_input_simple("Invalid derivation path length".to_string()));
                     }
                     
                     let mut path = Vec::new();

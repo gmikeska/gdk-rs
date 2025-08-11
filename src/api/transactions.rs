@@ -236,19 +236,19 @@ impl TransactionBroadcaster {
         };
 
         let original_status = original_status
-            .ok_or_else(|| GdkError::InvalidInput("Original transaction not found".to_string()))?;
+            .ok_or_else(|| GdkError::invalid_input_simple("Original transaction not found".to_string()))?;
 
         // Validate RBF conditions
         if !original_status.rbf_enabled {
-            return Err(GdkError::InvalidInput("Original transaction does not support RBF".to_string()));
+            return Err(GdkError::invalid_input_simple("Original transaction does not support RBF".to_string()));
         }
 
         if original_status.is_final() {
-            return Err(GdkError::InvalidInput("Cannot replace finalized transaction".to_string()));
+            return Err(GdkError::invalid_input_simple("Cannot replace finalized transaction".to_string()));
         }
 
         if rbf_params.new_fee_rate <= original_status.fee_rate {
-            return Err(GdkError::InvalidInput("New fee rate must be higher than original".to_string()));
+            return Err(GdkError::invalid_input_simple("New fee rate must be higher than original".to_string()));
         }
 
         let new_txid = hex::encode(new_transaction.txid());

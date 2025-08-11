@@ -87,7 +87,7 @@ impl UtxoInfo {
         
         // Validate the address is for the correct network
         if address.network != network {
-            return Err(GdkError::InvalidInput(format!("Address network mismatch: expected {:?}, got {:?}", network, address.network)));
+            return Err(GdkError::invalid_input_simple(format!("Address network mismatch: expected {:?}, got {:?}", network, address.network)));
         }
         let script_pubkey = address.script_pubkey();
 
@@ -109,10 +109,10 @@ impl UtxoInfo {
     /// Get the outpoint for this UTXO
     pub fn outpoint(&self) -> Result<OutPoint> {
         let txid_bytes = hex::decode(&self.txid)
-            .map_err(|_| GdkError::InvalidInput("Invalid transaction ID".to_string()))?;
+            .map_err(|_| GdkError::invalid_input_simple("Invalid transaction ID".to_string()))?;
         
         if txid_bytes.len() != 32 {
-            return Err(GdkError::InvalidInput("Transaction ID must be 32 bytes".to_string()));
+            return Err(GdkError::invalid_input_simple("Transaction ID must be 32 bytes".to_string()));
         }
 
         let mut txid = [0u8; 32];
@@ -283,21 +283,21 @@ impl TransactionBuilder {
     /// Validate build parameters
     fn validate_build_params(&self, params: &TransactionBuildParams) -> Result<()> {
         if !params.send_all && params.addressees.is_empty() {
-            return Err(GdkError::InvalidInput("No recipients specified".to_string()));
+            return Err(GdkError::invalid_input_simple("No recipients specified".to_string()));
         }
 
         for addressee in &params.addressees {
             if addressee.satoshi == 0 && !params.send_all {
-                return Err(GdkError::InvalidInput("Output amount cannot be zero".to_string()));
+                return Err(GdkError::invalid_input_simple("Output amount cannot be zero".to_string()));
             }
 
             // Validate address format
             let address = Address::from_str(&addressee.address)
-                .map_err(|_| GdkError::InvalidInput(format!("Invalid address: {}", addressee.address)))?;
+                .map_err(|_| GdkError::invalid_input_simple(format!("Invalid address: {}", addressee.address)))?;
             
             // Validate the address is for the correct network
             if address.network != self.network {
-                return Err(GdkError::InvalidInput(format!("Address network mismatch: expected {:?}, got {:?}", self.network, address.network)));
+                return Err(GdkError::invalid_input_simple(format!("Address network mismatch: expected {:?}, got {:?}", self.network, address.network)));
             }
         }
 
@@ -322,7 +322,7 @@ impl TransactionBuilder {
             .collect();
 
         if filtered.is_empty() {
-            return Err(GdkError::InvalidInput("No suitable UTXOs available".to_string()));
+            return Err(GdkError::invalid_input_simple("No suitable UTXOs available".to_string()));
         }
 
         Ok(filtered)
@@ -364,7 +364,7 @@ impl TransactionBuilder {
         }
 
         if total < target_amount {
-            return Err(GdkError::InvalidInput("Insufficient funds".to_string()));
+            return Err(GdkError::invalid_input_simple("Insufficient funds".to_string()));
         }
 
         Ok(selected)
@@ -395,7 +395,7 @@ impl TransactionBuilder {
         }
 
         if total < target_amount {
-            return Err(GdkError::InvalidInput("Insufficient funds".to_string()));
+            return Err(GdkError::invalid_input_simple("Insufficient funds".to_string()));
         }
 
         Ok(selected)
@@ -418,7 +418,7 @@ impl TransactionBuilder {
         }
 
         if total < target_amount {
-            return Err(GdkError::InvalidInput("Insufficient funds".to_string()));
+            return Err(GdkError::invalid_input_simple("Insufficient funds".to_string()));
         }
 
         Ok(selected)
@@ -441,7 +441,7 @@ impl TransactionBuilder {
         }
 
         if total < target_amount {
-            return Err(GdkError::InvalidInput("Insufficient funds".to_string()));
+            return Err(GdkError::invalid_input_simple("Insufficient funds".to_string()));
         }
 
         Ok(selected)
@@ -467,7 +467,7 @@ impl TransactionBuilder {
         }
 
         if total < target_amount {
-            return Err(GdkError::InvalidInput("Insufficient funds".to_string()));
+            return Err(GdkError::invalid_input_simple("Insufficient funds".to_string()));
         }
 
         Ok(selected)
@@ -590,12 +590,12 @@ impl TransactionBuilder {
         if params.send_all {
             // Send all: single output with (input_value - fee)
             if params.addressees.len() != 1 {
-                return Err(GdkError::InvalidInput("Send all requires exactly one recipient".to_string()));
+                return Err(GdkError::invalid_input_simple("Send all requires exactly one recipient".to_string()));
             }
             
             let send_amount = input_value.saturating_sub(fee);
             if send_amount < 546 {
-                return Err(GdkError::InvalidInput("Insufficient funds after fee".to_string()));
+                return Err(GdkError::invalid_input_simple("Insufficient funds after fee".to_string()));
             }
 
             let address = Address::from_str(&params.addressees[0].address)?;
@@ -619,7 +619,7 @@ impl TransactionBuilder {
                     Address::from_str(addr)?
                 } else {
                     // In a real implementation, this would generate a new change address
-                    return Err(GdkError::InvalidInput("Change address required".to_string()));
+                    return Err(GdkError::invalid_input_simple("Change address required".to_string()));
                 };
 
                 let change_out = TxOut::new(change_amount, change_address.script_pubkey());

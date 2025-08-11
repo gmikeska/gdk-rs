@@ -289,7 +289,7 @@ impl NotificationManager {
                 .collect();
             Ok(filtered)
         } else {
-            Err(GdkError::InvalidInput("Subscription not found".to_string()))
+            Err(GdkError::invalid_input_simple("Subscription not found".to_string()))
         }
     }
 
@@ -301,7 +301,7 @@ impl NotificationManager {
             subscription.update_activity();
             Ok(())
         } else {
-            Err(GdkError::InvalidInput("Subscription not found".to_string()))
+            Err(GdkError::invalid_input_simple("Subscription not found".to_string()))
         }
     }
 
