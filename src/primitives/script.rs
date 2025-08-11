@@ -512,6 +512,33 @@ impl Script {
         Script(script)
     }
 
+    /// Create an OP_RETURN script with the given data payload
+    pub fn new_op_return(data: &[u8]) -> Self {
+        let mut script = Vec::with_capacity(1 + data.len() + if data.len() <= 75 { 1 } else { 2 });
+        script.push(0x6a); // OP_RETURN
+        
+        // Push the data using appropriate push opcode
+        if data.is_empty() {
+            // No data to push
+        } else if data.len() <= 75 {
+            // Direct push for 1-75 bytes
+            script.push(data.len() as u8);
+            script.extend_from_slice(data);
+        } else if data.len() <= 255 {
+            // Use OP_PUSHDATA1 for larger data
+            script.push(0x4c); // OP_PUSHDATA1
+            script.push(data.len() as u8);
+            script.extend_from_slice(data);
+        } else {
+            // For very large data (up to 65535 bytes), use OP_PUSHDATA2
+            script.push(0x4d); // OP_PUSHDATA2
+            script.extend_from_slice(&(data.len() as u16).to_le_bytes());
+            script.extend_from_slice(data);
+        }
+        
+        Script(script)
+    }
+
     /// Execute the script with the given stack and transaction context
     pub fn execute(&self, stack: &mut Vec<Vec<u8>>, tx_context: Option<&ScriptExecutionContext>) -> Result<bool> {
         let mut executor = ScriptExecutor::new(stack, tx_context);
@@ -1126,6 +1153,36 @@ mod tests {
         
         let regular_script = Script::new_p2pkh(&[0x12; 20]);
         assert!(!regular_script.is_op_return());
+    }
+
+    #[test]
+    fn test_new_op_return() {
+        // Test empty OP_RETURN
+        let empty_op_return = Script::new_op_return(&[]);
+        assert_eq!(empty_op_return.as_bytes(), &[0x6a]); // Just OP_RETURN
+        assert!(empty_op_return.is_op_return());
+        
+        // Test small data (direct push)
+        let small_data = [0x01, 0x02, 0x03, 0x04];
+        let small_op_return = Script::new_op_return(&small_data);
+        assert_eq!(small_op_return.as_bytes(), &[0x6a, 0x04, 0x01, 0x02, 0x03, 0x04]); // OP_RETURN + length + data
+        assert!(small_op_return.is_op_return());
+        
+        // Test larger data (OP_PUSHDATA1)
+        let large_data = vec![0x42; 100]; // 100 bytes
+        let large_op_return = Script::new_op_return(&large_data);
+        let expected_start = [0x6a, 0x4c, 0x64]; // OP_RETURN + OP_PUSHDATA1 + 100
+        assert_eq!(&large_op_return.as_bytes()[0..3], &expected_start);
+        assert_eq!(large_op_return.as_bytes().len(), 103); // OP_RETURN + OP_PUSHDATA1 + length + 100 bytes data
+        assert!(large_op_return.is_op_return());
+        
+        // Test very large data (OP_PUSHDATA2)
+        let very_large_data = vec![0x55; 300]; // 300 bytes
+        let very_large_op_return = Script::new_op_return(&very_large_data);
+        let expected_start = [0x6a, 0x4d, 0x2c, 0x01]; // OP_RETURN + OP_PUSHDATA2 + 300 (little endian)
+        assert_eq!(&very_large_op_return.as_bytes()[0..4], &expected_start);
+        assert_eq!(very_large_op_return.as_bytes().len(), 304); // OP_RETURN + OP_PUSHDATA2 + 2 bytes length + 300 bytes data
+        assert!(very_large_op_return.is_op_return());
     }
 
     #[test]

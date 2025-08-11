@@ -583,8 +583,8 @@ async fn test_transaction_display() {
 
 #[tokio::test]
 async fn test_signing_capabilities_analysis() {
-    use gdk_rs::primitives::psbt::{PartiallySignedTransaction, PsbtInput, Bip32Derivation};
-    use gdk_rs::primitives::transaction::{Transaction, TxIn, TxOut};
+    use gdk_rs::primitives::psbt::{PartiallySignedTransaction, Bip32Derivation};
+    use gdk_rs::primitives::transaction::{Transaction, TxIn};
     use gdk_rs::primitives::transaction::OutPoint;
     use gdk_rs::primitives::script::Script;
     use gdk_rs::primitives::bip32::{DerivationPath, Fingerprint};
@@ -709,9 +709,6 @@ async fn test_multi_device_signing_coordination() {
 
 #[tokio::test]
 async fn test_hardware_wallet_manager_psbt_operations() {
-    use gdk_rs::primitives::psbt::PartiallySignedTransaction;
-    use gdk_rs::primitives::transaction::Transaction;
-    
     let manager = HardwareWalletManager::new();
     
     // Connect to a device
@@ -783,7 +780,7 @@ async fn test_hardware_wallet_error_handling_during_signing() {
 
 #[tokio::test]
 async fn test_hardware_wallet_signing_coordinator() {
-    use gdk_rs::hw::{HardwareWalletSigningCoordinator, SigningStatus};
+    use gdk_rs::hw::HardwareWalletSigningCoordinator;
     use gdk_rs::primitives::psbt::PartiallySignedTransaction;
     use gdk_rs::primitives::transaction::Transaction;
     use std::sync::Arc;
@@ -1082,8 +1079,8 @@ async fn test_hardware_wallet_transaction_signer_signature_verification() {
 #[tokio::test]
 async fn test_device_signing_capability_verification() {
     use gdk_rs::hw::HardwareWalletSignatureVerifier;
-    use gdk_rs::primitives::psbt::{PartiallySignedTransaction, PsbtInput, Bip32Derivation};
-    use gdk_rs::primitives::transaction::{Transaction, TxIn, TxOut};
+    use gdk_rs::primitives::psbt::{PartiallySignedTransaction, Bip32Derivation};
+    use gdk_rs::primitives::transaction::{Transaction, TxIn};
     use gdk_rs::primitives::transaction::OutPoint;
     use gdk_rs::primitives::script::Script;
     use gdk_rs::primitives::bip32::{DerivationPath, Fingerprint};
@@ -1156,11 +1153,8 @@ async fn test_device_signing_capability_verification() {
 
 #[tokio::test]
 async fn test_signing_session_management() {
-    use gdk_rs::hw::{HardwareWalletSigningCoordinator, SigningStatus};
-    use gdk_rs::primitives::psbt::PartiallySignedTransaction;
-    use gdk_rs::primitives::transaction::Transaction;
+    use gdk_rs::hw::HardwareWalletSigningCoordinator;
     use std::sync::Arc;
-    use std::time::Duration;
     
     let manager = Arc::new(HardwareWalletManager::new());
     let coordinator = HardwareWalletSigningCoordinator::new(manager);
@@ -1273,7 +1267,7 @@ async fn test_comprehensive_device_signing_flow() {
 
 #[tokio::test]
 async fn test_psbt_combination_in_multi_device_scenario() {
-    use gdk_rs::primitives::psbt::{PartiallySignedTransaction, PsbtInput, Bip32Derivation};
+    use gdk_rs::primitives::psbt::{PartiallySignedTransaction, Bip32Derivation};
     use gdk_rs::primitives::transaction::{Transaction, TxIn, TxOut};
     use gdk_rs::primitives::transaction::OutPoint;
     use gdk_rs::primitives::script::Script;

@@ -256,11 +256,80 @@ impl From<MethodCall> for JsonRpcRequest {
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LoginCredentials {
-    pub mnemonic: String,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub mnemonic: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub password: Option<String>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bip39_passphrase: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pin: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub pin_data: Option<crate::auth::PinData>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub username: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub core_descriptors: Option<Vec<String>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub xpub: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hardware_device_id: Option<String>,
+    #[cfg(feature = "hardware-wallets")]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub hardware_credentials: Option<crate::hw::HardwareWalletCredentials>,
+}
+
+impl LoginCredentials {
+    /// Create credentials for mnemonic-based authentication
+    pub fn from_mnemonic(mnemonic: String, password: Option<String>) -> Self {
+        Self {
+            mnemonic: Some(mnemonic),
+            password,
+            bip39_passphrase: None,
+            pin: None,
+            pin_data: None,
+            username: None,
+            core_descriptors: None,
+            xpub: None,
+            hardware_device_id: None,
+            #[cfg(feature = "hardware-wallets")]
+            hardware_credentials: None,
+        }
+    }
+    
+    /// Create credentials for PIN-based authentication
+    pub fn from_pin(pin: String, pin_data: crate::auth::PinData) -> Self {
+        Self {
+            mnemonic: None,
+            password: None,
+            bip39_passphrase: None,
+            pin: Some(pin),
+            pin_data: Some(pin_data),
+            username: None,
+            core_descriptors: None,
+            xpub: None,
+            hardware_device_id: None,
+            #[cfg(feature = "hardware-wallets")]
+            hardware_credentials: None,
+        }
+    }
+    
+    /// Create credentials for watch-only authentication with username/password
+    pub fn from_watch_only_user(username: String, password: String) -> Self {
+        Self {
+            mnemonic: None,
+            password: Some(password),
+            bip39_passphrase: None,
+            pin: None,
+            pin_data: None,
+            username: Some(username),
+            core_descriptors: None,
+            xpub: None,
+            hardware_device_id: None,
+            #[cfg(feature = "hardware-wallets")]
+            hardware_credentials: None,
+        }
+    }
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]

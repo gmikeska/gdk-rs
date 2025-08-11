@@ -139,7 +139,7 @@ fn test_confidential_txout_confidential() {
 
 #[test]
 fn test_confidential_transaction_creation() {
-    let mut tx = ConfidentialTransaction::new();
+    let tx = ConfidentialTransaction::new();
     assert_eq!(tx.version, 2);
     assert_eq!(tx.lock_time, 0);
     assert!(tx.input.is_empty());

@@ -778,7 +778,7 @@ pub mod confidential {
         if asset_blinding_factor.is_zero() {
             // For zero blinding factor, return the asset ID with prefix
             let mut commitment = [0u8; 33];
-            commitment[0] = 0x01; // Explicit asset prefix
+            commitment[0] = 0x02; // Even parity
             commitment[1..].copy_from_slice(asset_id.as_bytes());
             Ok(commitment)
         } else {
@@ -793,7 +793,7 @@ pub mod confidential {
             
             let commitment_hash = sha256(&commitment_data);
             let mut commitment = [0u8; 33];
-            commitment[0] = 0x02; // Compressed point prefix
+            commitment[0] = 0x03; // Odd parity
             commitment[1..].copy_from_slice(&commitment_hash);
             
             Ok(commitment)
@@ -1344,7 +1344,7 @@ impl Default for TransactionBlinder {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use hex;
+
 
     #[test]
     fn test_asset_id_creation() {
@@ -1479,7 +1479,7 @@ mod tests {
 
     #[test]
     fn test_confidential_transaction_creation() {
-        let mut tx = ConfidentialTransaction::new();
+        let tx = ConfidentialTransaction::new();
         assert_eq!(tx.version, 2);
         assert_eq!(tx.lock_time, 0);
         assert!(tx.input.is_empty());

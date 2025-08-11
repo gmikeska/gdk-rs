@@ -22,7 +22,7 @@ fn test_transaction_builder_add_input() {
     let outpoint = OutPoint::new([1; 32], 0);
     let script_sig = Script::new();
     
-    builder.add_input(outpoint, script_sig.clone());
+    builder.add_input(outpoint.clone(), script_sig.clone());
     
     assert_eq!(builder.inputs().len(), 1);
     assert_eq!(builder.inputs()[0].previous_output, outpoint);
@@ -134,7 +134,7 @@ fn test_transaction_builder_multiple_inputs_outputs() {
     for i in 0..3 {
         let mut txid = [0; 32];
         txid[0] = i as u8;
-        let outpoint = OutPoint::new(txid, i);
+        let outpoint = OutPoint::new(txid, i as u32);
         let script_sig = Script::new();
         builder.add_input(outpoint, script_sig);
     }
@@ -155,7 +155,7 @@ fn test_transaction_builder_multiple_inputs_outputs() {
     
     // Verify input ordering is preserved
     for i in 0..3 {
-        assert_eq!(tx.input[i].previous_output.vout, i);
+        assert_eq!(tx.input[i].previous_output.vout, i as u32);
     }
     
     // Verify output values

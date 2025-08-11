@@ -220,11 +220,24 @@ impl Default for FeeEstimate {
 }
 
 /// Comprehensive transaction builder
+#[derive(Debug, Clone)]
 pub struct TransactionBuilder {
     /// Network this builder operates on
     network: Network,
     /// Current fee estimates
     fee_estimates: FeeEstimate,
+    /// Internal state for inputs
+    inputs: Vec<TxIn>,
+    /// Internal state for outputs
+    outputs: Vec<TxOut>,
+    /// Internal state for witness data (input_index -> witness_data)
+    witnesses: HashMap<usize, Vec<Vec<u8>>>,
+    /// Internal state for fee rate
+    fee_rate: Option<u64>,
+    /// Internal state for lock time
+    lock_time: u32,
+    /// Internal state for transaction version
+    version: i32,
 }
 
 impl TransactionBuilder {
@@ -233,6 +246,12 @@ impl TransactionBuilder {
         Self {
             network,
             fee_estimates: FeeEstimate::default(),
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+            witnesses: HashMap::new(),
+            fee_rate: None,
+            lock_time: 0,
+            version: 2,
         }
     }
 
@@ -649,7 +668,7 @@ impl TransactionBuilder {
     }
 
     /// Estimate fee for a transaction without building it
-    pub fn estimate_fee(
+    pub fn estimate_fee_with_params(
         &self,
         params: &TransactionBuildParams,
         available_utxos: &[UtxoInfo],
@@ -670,5 +689,255 @@ impl TransactionBuilder {
 
         self.calculate_fee(&selected_utxos, &params.addressees, params)
     }
+
+    // Input management methods for test compatibility
+
+    /// Add an input to the transaction builder
+    pub fn add_input(&mut self, outpoint: OutPoint, script_sig: Script) {
+        let tx_in = TxIn::new(outpoint, script_sig, 0xffffffff);
+        self.inputs.push(tx_in);
+    }
+
+    /// Add an input with a custom sequence number
+    pub fn add_input_with_sequence(&mut self, outpoint: OutPoint, script_sig: Script, sequence: u32) {
+        let tx_in = TxIn::new(outpoint, script_sig, sequence);
+        self.inputs.push(tx_in);
+    }
+
+    /// Get a reference to the inputs vector
+    pub fn inputs(&self) -> &[TxIn] {
+        &self.inputs
+    }
+
+    // Output management methods for test compatibility
+
+    /// Add an output to the transaction builder
+    pub fn add_output(&mut self, value: u64, script_pubkey: Script) {
+        let tx_out = TxOut::new(value, script_pubkey);
+        self.outputs.push(tx_out);
+    }
+
+    /// Get a reference to the outputs vector
+    pub fn outputs(&self) -> &[TxOut] {
+        &self.outputs
+    }
+
+    // Witness management methods for test compatibility
+
+    /// Add witness data for a specific input index
+    pub fn add_witness(&mut self, input_index: usize, witness_data: Vec<Vec<u8>>) -> Result<()> {
+        // Validate input index bounds
+        if input_index >= self.inputs.len() {
+            return Err(GdkError::invalid_input_simple(
+                format!("Input index {} out of bounds (have {} inputs)", input_index, self.inputs.len())
+            ));
+        }
+
+        // Store witness data for the specified input index
+        self.witnesses.insert(input_index, witness_data);
+        Ok(())
+    }
+
+    // Configuration methods for test compatibility
+
+    /// Set the fee rate for the transaction builder
+    pub fn set_fee_rate(&mut self, fee_rate: u64) {
+        self.fee_rate = Some(fee_rate);
+    }
+
+    /// Set the lock time for the transaction builder
+    pub fn set_lock_time(&mut self, lock_time: u32) {
+        self.lock_time = lock_time;
+    }
+
+    /// Set the version for the transaction builder
+    pub fn set_version(&mut self, version: i32) {
+        self.version = version;
+    }
+
+    /// Get the fee rate from the transaction builder
+    pub fn fee_rate(&self) -> Option<u64> {
+        self.fee_rate
+    }
+
+    /// Get the lock time from the transaction builder
+    pub fn lock_time(&self) -> u32 {
+        self.lock_time
+    }
+
+    /// Get the network from the transaction builder
+    pub fn network(&self) -> Network {
+        self.network
+    }
+
+    // Utility methods for test compatibility
+
+    /// Clear all internal state vectors and optional values
+    pub fn clear(&mut self) {
+        self.inputs.clear();
+        self.outputs.clear();
+        self.witnesses.clear();
+        self.fee_rate = None;
+        self.lock_time = 0;
+        self.version = 2;
+    }
+
+    /// Clear state and update network
+    pub fn reset(&mut self, network: Network) {
+        self.clear();
+        self.network = network;
+        self.fee_estimates = FeeEstimate::default();
+    }
+
+    /// Build a transaction from the internal state
+    pub fn build(&self) -> Result<Transaction> {
+        // Validate that inputs and outputs are present before building
+        if self.inputs.is_empty() {
+            return Err(GdkError::invalid_input_simple("Cannot build transaction: no inputs provided".to_string()));
+        }
+
+        if self.outputs.is_empty() {
+            return Err(GdkError::invalid_input_simple("Cannot build transaction: no outputs provided".to_string()));
+        }
+
+        // Create a new transaction
+        let mut transaction = Transaction::new();
+
+        // Set transaction version and lock time from internal state
+        transaction.version = self.version;
+        transaction.lock_time = self.lock_time;
+
+        // Copy inputs from internal state
+        transaction.input = self.inputs.clone();
+
+        // Apply witness data to transaction inputs where available
+        for (input_index, witness_data) in &self.witnesses {
+            if *input_index < transaction.input.len() {
+                transaction.input[*input_index].witness = witness_data.clone();
+            }
+        }
+
+        // Copy outputs from internal state
+        transaction.output = self.outputs.clone();
+
+        Ok(transaction)
+    }
+
+    // Estimation methods for test compatibility
+
+    /// Estimate the transaction size in bytes
+    pub fn estimate_size(&self) -> u64 {
+        // Base transaction size (version + locktime + input/output counts)
+        let mut size = 10u64;
+
+        // Add input sizes (each input is approximately 148 bytes for P2PKH)
+        // This is a simplified estimation - in reality it depends on script types
+        for _input in &self.inputs {
+            size += 148; // Conservative estimate for P2PKH inputs
+        }
+
+        // Add output sizes (each output is 34 bytes: 8 bytes value + 26 bytes script)
+        for _output in &self.outputs {
+            size += 34;
+        }
+
+        // Add witness data size if present
+        for witness_data in self.witnesses.values() {
+            for witness_item in witness_data {
+                size += witness_item.len() as u64 + 1; // +1 for length prefix
+            }
+        }
+
+        size
+    }
+
+    /// Estimate the transaction virtual size in vbytes (for fee calculation)
+    pub fn estimate_vsize(&self) -> u64 {
+        // If there's no witness data, vsize equals size
+        if self.witnesses.is_empty() {
+            return self.estimate_size();
+        }
+
+        // Base transaction size (version + locktime + input/output counts)
+        let mut base_size = 10u64;
+        let mut witness_size = 0u64;
+
+        // Add input sizes
+        for _input in &self.inputs {
+            base_size += 41; // Outpoint (36) + script_sig length (1) + sequence (4)
+            // For witness inputs, script_sig is typically empty, so we use minimal size
+        }
+
+        // Add output sizes (each output is 34 bytes: 8 bytes value + 26 bytes script)
+        for _output in &self.outputs {
+            base_size += 34;
+        }
+
+        // Add witness data size
+        witness_size += 2; // Witness flag and marker
+        
+        for witness_data in self.witnesses.values() {
+            witness_size += 1; // Number of witness items
+            for witness_item in witness_data {
+                witness_size += witness_item.len() as u64 + 1; // +1 for length prefix
+            }
+        }
+
+        // Calculate virtual size: base_size + witness_size/4 (witness discount)
+        base_size + (witness_size + 3) / 4 // +3 for ceiling division
+    }
+
+    /// Estimate fee for the current transaction state (parameterless version for test compatibility)
+    pub fn estimate_fee(&self) -> Result<u64> {
+        // Require fee rate to be set explicitly
+        let fee_rate = self.fee_rate.ok_or_else(|| {
+            GdkError::invalid_input_simple("Fee rate must be set before estimating fee".to_string())
+        })?;
+        
+        // Calculate fee based on virtual size
+        let vsize = self.estimate_vsize();
+        Ok(fee_rate * vsize)
+    }
 }
 
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::primitives::address::Network;
+
+    #[test]
+    fn test_estimation_methods() {
+        let mut builder = TransactionBuilder::new(Network::Mainnet);
+        
+        // Add input and output
+        let outpoint = OutPoint::new([1; 32], 0);
+        let script_sig = Script::new();
+        builder.add_input(outpoint, script_sig);
+        
+        let value = 100000;
+        let script_pubkey = Script::new_p2pkh(&[0; 20]);
+        builder.add_output(value, script_pubkey);
+        
+        // Test estimate_size
+        let size = builder.estimate_size();
+        assert!(size > 0);
+        println!("Estimated size: {} bytes", size);
+        
+        // Test estimate_vsize
+        let vsize = builder.estimate_vsize();
+        assert!(vsize > 0);
+        println!("Estimated vsize: {} vbytes", vsize);
+        
+        // Test estimate_fee without fee rate (should fail)
+        assert!(builder.estimate_fee().is_err());
+        
+        // Set fee rate and test estimate_fee
+        let fee_rate = 10; // sat/vbyte
+        builder.set_fee_rate(fee_rate);
+        
+        let fee = builder.estimate_fee().unwrap();
+        let expected_fee = vsize * fee_rate;
+        assert_eq!(fee, expected_fee);
+        println!("Estimated fee: {} satoshis", fee);
+    }
+}

@@ -39,11 +39,10 @@ async fn test_session_connect() {
 #[tokio::test]
 async fn test_session_login() {
     let (session, _) = get_connected_session().await;
-    let creds = LoginCredentials {
-        mnemonic: "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title".to_string(),
-        password: None,
-        bip39_passphrase: None,
-    };
+    let creds = LoginCredentials::from_mnemonic(
+        "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title".to_string(),
+        None
+    );
     let result = session.login(&creds).await;
     assert!(result.is_ok());
     assert_eq!(result.unwrap().wallet_hash_id, "mock_wallet_hash_id");
@@ -89,11 +88,10 @@ async fn test_create_and_sign_transaction() {
     let (session, _) = get_connected_session().await;
 
     // Login to create the wallet
-    let creds = LoginCredentials {
-        mnemonic: "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title".to_string(),
-        password: None,
-        bip39_passphrase: None,
-    };
+    let creds = LoginCredentials::from_mnemonic(
+        "legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth useful legal winner thank year wave sausage worth title".to_string(),
+        None
+    );
     session.login(&creds).await.unwrap();
 
     // Create

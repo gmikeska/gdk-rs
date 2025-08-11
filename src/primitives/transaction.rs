@@ -172,6 +172,12 @@ impl Transaction {
         Ok(buf)
     }
     
+    /// Check if this transaction signals RBF (Replace-By-Fee)
+    /// A transaction signals RBF if any of its inputs has a sequence number < 0xfffffffe
+    pub fn is_rbf_signaling(&self) -> bool {
+        self.input.iter().any(|input| input.sequence < 0xfffffffe)
+    }
+    
     /// Encode witness data for a single input
     fn encode_witness<W: Write>(witness: &[Vec<u8>], writer: &mut W) -> Result<usize> {
         let mut written = write_varint(writer, witness.len() as u64)?;

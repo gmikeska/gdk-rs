@@ -46,11 +46,10 @@ async fn create_test_session_with_wallet() -> (Session, LoginCredentials) {
     session.connect(&network_params, &urls).await.unwrap();
     
     let mnemonic = Mnemonic::generate(128).unwrap();
-    let credentials = LoginCredentials {
-        mnemonic: mnemonic.to_string(),
-        password: None,
-        bip39_passphrase: None,
-    };
+    let credentials = LoginCredentials::from_mnemonic(
+        mnemonic.to_string(),
+        None
+    );
     
     session.register_user(&credentials).await.unwrap();
     session.login(&credentials).await.unwrap();

@@ -1,6 +1,7 @@
 use crate::error::GdkError;
+use crate::protocol::LoginCredentials;
 #[cfg(feature = "hardware-wallets")]
-use crate::hw::{HardwareWalletManager, HardwareWalletCredentials, HardwareWalletInfo};
+use crate::hw::{HardwareWalletManager, HardwareWalletInfo, HardwareWalletCredentials};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -164,136 +165,6 @@ impl PinData {
     }
 }
 
-/// Login credentials for various authentication methods
-#[derive(Serialize, Deserialize, Debug, Clone)]
-pub struct LoginCredentials {
-    /// BIP39 mnemonic phrase
-    pub mnemonic: Option<String>,
-    /// Password for mnemonic (BIP39 passphrase)
-    pub password: Option<String>,
-    /// BIP39 passphrase
-    pub bip39_passphrase: Option<String>,
-    /// PIN for PIN-based authentication
-    pub pin: Option<String>,
-    /// Encrypted PIN data
-    pub pin_data: Option<PinData>,
-    /// Username for watch-only wallets
-    pub username: Option<String>,
-    /// Core descriptors for descriptor-based watch-only wallets
-    pub core_descriptors: Option<Vec<String>>,
-    /// Extended public key for watch-only wallets
-    pub xpub: Option<String>,
-    /// Hardware wallet device ID
-    pub hardware_device_id: Option<String>,
-    /// Hardware wallet credentials
-    #[cfg(feature = "hardware-wallets")]
-    pub hardware_credentials: Option<HardwareWalletCredentials>,
-}
-
-impl LoginCredentials {
-    /// Create credentials for mnemonic-based authentication
-    pub fn from_mnemonic(mnemonic: String, password: Option<String>) -> Self {
-        Self {
-            mnemonic: Some(mnemonic),
-            password,
-            bip39_passphrase: None,
-            pin: None,
-            pin_data: None,
-            username: None,
-            core_descriptors: None,
-            xpub: None,
-            hardware_device_id: None,
-            #[cfg(feature = "hardware-wallets")]
-            hardware_credentials: None,
-        }
-    }
-    
-    /// Create credentials for PIN-based authentication
-    pub fn from_pin(pin: String, pin_data: PinData) -> Self {
-        Self {
-            mnemonic: None,
-            password: None,
-            bip39_passphrase: None,
-            pin: Some(pin),
-            pin_data: Some(pin_data),
-            username: None,
-            core_descriptors: None,
-            xpub: None,
-            hardware_device_id: None,
-            #[cfg(feature = "hardware-wallets")]
-            hardware_credentials: None,
-        }
-    }
-    
-    /// Create credentials for watch-only authentication with username/password
-    pub fn from_watch_only_user(username: String, password: String) -> Self {
-        Self {
-            mnemonic: None,
-            password: Some(password),
-            bip39_passphrase: None,
-            pin: None,
-            pin_data: None,
-            username: Some(username),
-            core_descriptors: None,
-            xpub: None,
-            hardware_device_id: None,
-            #[cfg(feature = "hardware-wallets")]
-            hardware_credentials: None,
-        }
-    }
-    
-    /// Create credentials for descriptor-based watch-only authentication
-    pub fn from_descriptors(descriptors: Vec<String>) -> Self {
-        Self {
-            mnemonic: None,
-            password: None,
-            bip39_passphrase: None,
-            pin: None,
-            pin_data: None,
-            username: None,
-            core_descriptors: Some(descriptors),
-            xpub: None,
-            hardware_device_id: None,
-            #[cfg(feature = "hardware-wallets")]
-            hardware_credentials: None,
-        }
-    }
-    
-    /// Create credentials for xpub-based watch-only authentication
-    pub fn from_xpub(xpub: String) -> Self {
-        Self {
-            mnemonic: None,
-            password: None,
-            bip39_passphrase: None,
-            pin: None,
-            pin_data: None,
-            username: None,
-            core_descriptors: None,
-            xpub: Some(xpub),
-            hardware_device_id: None,
-            #[cfg(feature = "hardware-wallets")]
-            hardware_credentials: None,
-        }
-    }
-    
-    /// Create credentials for hardware wallet authentication
-    #[cfg(feature = "hardware-wallets")]
-    pub fn from_hardware_wallet(device_id: String, credentials: HardwareWalletCredentials) -> Self {
-        Self {
-            mnemonic: None,
-            password: None,
-            bip39_passphrase: None,
-            pin: None,
-            pin_data: None,
-            username: None,
-            core_descriptors: None,
-            xpub: None,
-            hardware_device_id: Some(device_id),
-            #[cfg(feature = "hardware-wallets")]
-            hardware_credentials: Some(credentials),
-        }
-    }
-}
 
 /// Result of registration or login operations
 #[derive(Serialize, Deserialize, Debug, Clone)]

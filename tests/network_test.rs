@@ -492,7 +492,6 @@ async fn test_jsonrpc_legacy_compatibility() {
 
 #[cfg(feature = "tor-support")]
 mod tor_tests {
-    use super::*;
     use gdk_rs::tor::{TorManager, TorConfig, CircuitStatus};
     use std::net::{IpAddr, Ipv4Addr, SocketAddr};
     use std::time::Duration;

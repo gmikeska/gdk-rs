@@ -15,7 +15,7 @@ fn test_default_features() {
 #[cfg(feature = "hardware-wallets")]
 #[test]
 fn test_hardware_wallet_feature() {
-    use gdk_rs::hw::{HardwareWallet, HardwareWalletManager, HardwareWalletType};
+    use gdk_rs::hw::{HardwareWalletManager, HardwareWalletType};
     
     // Hardware wallet types should be available
     let _ = HardwareWalletType::Ledger;
@@ -38,7 +38,7 @@ fn test_tor_support_feature() {
 #[test]
 fn test_liquid_network_feature() {
     use gdk_rs::assets::{AssetRegistry, AssetRegistryConfig};
-    use gdk_rs::primitives::liquid::{ConfidentialTransaction, ConfidentialAsset};
+
     
     // Liquid functionality should be available
     let _ = AssetRegistryConfig {

@@ -5,10 +5,10 @@ use crate::primitives::script::Script;
 use crate::transaction_signer::ScriptType;
 
 // Re-export authentication types
-pub use crate::auth::{LoginCredentials, PinData, RegisterLoginResult, AuthManager};
+pub use crate::auth::{PinData, RegisterLoginResult, AuthManager};
 
 // Re-export protocol types
-pub use crate::protocol::Addressee;
+pub use crate::protocol::{Addressee, LoginCredentials};
 
 // Re-export logging types
 pub use crate::utils::logging::LogLevel;
